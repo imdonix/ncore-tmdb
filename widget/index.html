@@ -24,3 +24,20 @@
         </div>
     </div>
 </div>
+
+<script>
+(function() {
+    const tmdbID = '#CONTENT_TMDBID#';
+    const contentType = '#CONTENT_TYPE#';
+
+    const url = `/api/${contentType}/${tmdbID}`;
+    fetch(url)
+        .then(resp => resp.json())
+        .then(data => {
+            console.log('Fetched ' + contentType + ' data:', data);
+        })
+        .catch(err => {
+            console.error('Failed to fetch:', err);
+        });
+})();
+</script>

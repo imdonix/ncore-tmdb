@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -73,7 +74,8 @@ func modifyResponse(resp *http.Response) error {
 	}
 	resp.Body.Close()
 
-	modifiedBody := modifyContent(body)
+	tmdbID, contentType := extractTMDBIDFromPath(resp.Request.URL.Path)
+	modifiedBody := modifyContent(body, tmdbID, contentType)
 
 	resp.Body = io.NopCloser(bytes.NewReader(modifiedBody))
 	resp.ContentLength = int64(len(modifiedBody))
@@ -82,7 +84,7 @@ func modifyResponse(resp *http.Response) error {
 	return nil
 }
 
-func modifyContent(body []byte) []byte {
+func modifyContent(body []byte, tmdbID string, contentType string) []byte {
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
 		return body
@@ -97,8 +99,14 @@ func modifyContent(body []byte) []byte {
 	doc.Find("footer").Remove()
 	doc.Find("section.inner_content.bg_image.community").Remove()
 
-	widgetContent := loadWidget()
-	doc.Find("div#media_v4").Find("div.white_column").PrependHtml(widgetContent)
+	if tmdbID != "" {
+		widgetContent := loadWidget()
+		if widgetContent != "" {
+			widgetContent = strings.ReplaceAll(widgetContent, "#CONTENT_TMDBID#", tmdbID, )
+			widgetContent = strings.ReplaceAll(widgetContent, "#CONTENT_TYPE#", contentType, )
+			doc.Find("div#media_v4").Find("div.white_column").PrependHtml(widgetContent)
+		}
+	}
 
 	html, err := doc.Html()
 	if err != nil {
@@ -106,6 +114,22 @@ func modifyContent(body []byte) []byte {
 	}
 
 	return []byte(html)
+}
+
+func extractTMDBIDFromPath(path string) (string, string) {
+	movieRe := regexp.MustCompile(`/movie/(\d+)-`)
+	movieMatches := movieRe.FindStringSubmatch(path)
+	if len(movieMatches) > 1 {
+		return movieMatches[1], "movie"
+	}
+
+	tvRe := regexp.MustCompile(`/tv/(\d+)-`)
+	tvMatches := tvRe.FindStringSubmatch(path)
+	if len(tvMatches) > 1 {
+		return tvMatches[1], "tv"
+	}
+
+	return "", ""
 }
 
 func loadWidget() string {

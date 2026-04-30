@@ -5,29 +5,35 @@ import (
 )
 
 type Content struct {
-	TMDBID int
-	Name   string
+	TMDBID      int
+	Type        string
+	Name        string
+	ReleaseDate string
 }
 
 func CreateContentTable() error {
 	query := `
 	CREATE TABLE IF NOT EXISTS content (
-		tmdb_id INTEGER PRIMARY KEY,
-		name TEXT
+		tmdb_id INTEGER NOT NULL,
+		type TEXT NOT NULL,
+		name TEXT,
+		release_date TEXT,
+		PRIMARY KEY (tmdb_id, type)
 	)`
 	_, err := DB.Exec(query)
 	return err
 }
 
-func InsertContent(tmdbID int, name string) error {
-	_, err := DB.Exec("INSERT OR REPLACE INTO content (tmdb_id, name) VALUES (?, ?)", tmdbID, name)
+func InsertContent(c *Content) error {
+	_, err := DB.Exec("INSERT OR REPLACE INTO content (tmdb_id, type, name, release_date) VALUES (?, ?, ?, ?)",
+		c.TMDBID, c.Type, c.Name, c.ReleaseDate)
 	return err
 }
 
-func GetContent(tmdbID int) (*Content, error) {
-	row := DB.QueryRow("SELECT tmdb_id, name FROM content WHERE tmdb_id = ?", tmdbID)
+func GetContent(tmdbID int, contentType string) (*Content, error) {
+	row := DB.QueryRow("SELECT tmdb_id, type, name, release_date FROM content WHERE tmdb_id = ? AND type = ?", tmdbID, contentType)
 	c := &Content{}
-	err := row.Scan(&c.TMDBID, &c.Name)
+	err := row.Scan(&c.TMDBID, &c.Type, &c.Name, &c.ReleaseDate)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -35,7 +41,7 @@ func GetContent(tmdbID int) (*Content, error) {
 }
 
 func ListContent() ([]Content, error) {
-	rows, err := DB.Query("SELECT tmdb_id, name FROM content")
+	rows, err := DB.Query("SELECT tmdb_id, type, name, release_date FROM content")
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +50,7 @@ func ListContent() ([]Content, error) {
 	var list []Content
 	for rows.Next() {
 		var c Content
-		if err := rows.Scan(&c.TMDBID, &c.Name); err != nil {
+		if err := rows.Scan(&c.TMDBID, &c.Type, &c.Name, &c.ReleaseDate); err != nil {
 			return nil, err
 		}
 		list = append(list, c)
