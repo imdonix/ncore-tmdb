@@ -1,0 +1,76 @@
+<div class="panel top_billed scroller">
+    <h3 dir="auto">Download using Torrent</h3>
+    <div class="season card">
+        <div class="content">
+            <div id="widget-torrent"></div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { h, render } from 'https://esm.sh/preact';
+    import { useState, useEffect } from 'https://esm.sh/preact/hooks';
+    import htm from 'https://esm.sh/htm';
+
+    const html = htm.bind(h);
+
+    const URL_FETCH = `/api/#CONTENT_TYPE#/#CONTENT_TMDBID#`;
+
+    (() => {
+        function TorrentWidget() {
+            const [torrents, setTorrents] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+
+            useEffect(() => {
+                fetch(URL_FETCH)
+                    .then((resp) => {
+                        if (!resp.ok) throw new Error('Network response was not ok');
+                        return resp.json();
+                    })
+                    .then((data) => {
+                        console.log(data)
+                        setTorrents(data.torrents || []);
+                        setLoading(false);
+                    })
+                    .catch((err) => {
+                        console.error('Failed to fetch torrents:', err);
+                        setError(err.message);
+                        setLoading(false);
+                    });
+            }, []);
+
+            if (loading) {
+                return html`<div class="loading">Loading torrents...</div>`;
+            }
+
+            if (error) {
+                return html`<div class="error">Error loading torrents: ${error}</div>`;
+            }
+
+            if (torrents.length === 0) {
+                return html`<div class="empty">No torrents found.</div>`;
+            }
+
+            return html`
+                <div id="torrent-list">
+                    ${torrents.map((t) =>
+                        html`<div key=${t.id} class="torrent-item">
+                            <h4>
+                                <a
+                                    href=${`/api/download/${t.ID}`}
+                                    target="_blank"
+                                    rel="noopener"
+                                >
+                                    ${t.Title} [S:${t.Seeders} L:${t.Leechers}]
+                                </a>
+                            </h4>
+                        </div>`
+                    )}
+                </div>
+            `;
+        }
+
+        render(html`<${TorrentWidget} />`, document.getElementById('widget-torrent'));
+    })();
+</script>

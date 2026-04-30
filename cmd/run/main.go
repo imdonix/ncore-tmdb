@@ -29,11 +29,11 @@ func main() {
 
 	service.InitTMDB()
 	service.InitNCore()
+	service.InitProxy()
 
 	r := gin.Default()
 
 	r.Static("/widget", "./widget")
-	r.Static("/dashboard", "./dashboard")
 
 	api.RegisterRoutes(r)
 

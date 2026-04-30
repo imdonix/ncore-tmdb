@@ -46,8 +46,6 @@ func fetchTMDB(endpoint string, params url.Values) ([]byte, error) {
 		return nil, err
 	}
 
-	os.WriteFile("a.json", data, 0644)
-
 	return data, nil
 }
 

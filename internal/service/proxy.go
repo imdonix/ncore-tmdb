@@ -18,6 +18,7 @@ import (
 )
 
 var tmdbURL *url.URL
+var widgetContent string
 
 func InitProxy() {
 	var err error
@@ -25,6 +26,12 @@ func InitProxy() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	content, err := os.ReadFile("widget/widget.html")
+	if err != nil {
+		panic(fmt.Sprintf("failed to load widget: %v", err))
+	}
+	widgetContent = string(content)
 }
 
 func SetupProxy(r *gin.Engine) {
@@ -99,13 +106,11 @@ func modifyContent(body []byte, tmdbID string, contentType string) []byte {
 	doc.Find("footer").Remove()
 	doc.Find("section.inner_content.bg_image.community").Remove()
 
-	if tmdbID != "" {
-		widgetContent := loadWidget()
-		if widgetContent != "" {
-			widgetContent = strings.ReplaceAll(widgetContent, "#CONTENT_TMDBID#", tmdbID, )
-			widgetContent = strings.ReplaceAll(widgetContent, "#CONTENT_TYPE#", contentType, )
-			doc.Find("div#media_v4").Find("div.white_column").PrependHtml(widgetContent)
-		}
+	if tmdbID != "" && contentType != "" {
+		w := widgetContent
+		w = strings.ReplaceAll(w, "#CONTENT_TMDBID#", tmdbID)
+		w = strings.ReplaceAll(w, "#CONTENT_TYPE#", contentType)
+		doc.Find("div#media_v4").Find("div.white_column").PrependHtml(w)
 	}
 
 	html, err := doc.Html()
@@ -130,12 +135,4 @@ func extractTMDBIDFromPath(path string) (string, string) {
 	}
 
 	return "", ""
-}
-
-func loadWidget() string {
-	content, err := os.ReadFile("widget/index.html")
-	if err != nil {
-		log.Fatal(err)
-	}
-	return string(content)
 }
