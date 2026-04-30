@@ -1,0 +1,6 @@
+.git
+bin
+tmp
+.air.toml
+.env
+*.db
