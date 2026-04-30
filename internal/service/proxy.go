@@ -1,4 +1,4 @@
-package proxy
+package service
 
 import (
 	"bytes"
@@ -19,7 +19,7 @@ import (
 
 var tmdbURL *url.URL
 
-func init() {
+func InitProxy() {
 	var err error
 	tmdbURL, err = url.Parse("https://www.themoviedb.org")
 	if err != nil {

@@ -2,12 +2,10 @@ package main
 
 import (
 	"log"
-	"os"
 
 	"media-manager/internal/api"
 	"media-manager/internal/database"
-	"media-manager/internal/proxy"
-	"media-manager/internal/tmdb"
+	"media-manager/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -29,19 +27,17 @@ func main() {
 		log.Fatal("Failed to create content table:", err)
 	}
 
-	tmdbAPIKey := os.Getenv("TMDB_API_KEY")
-	if tmdbAPIKey == "" {
-		log.Fatal("TMDB_API_KEY environment variable required")
-	}
-	tmdb.Init(tmdbAPIKey)
+	service.InitTMDB()
+	service.InitNCore()
 
 	r := gin.Default()
 
 	r.Static("/widget", "./widget")
 	r.Static("/dashboard", "./dashboard")
 
-	api.SetupAPI(r)
-	proxy.SetupProxy(r)
+	api.RegisterRoutes(r)
+
+	service.SetupProxy(r)
 
 	log.Println("Server starting on :8080")
 	r.Run(":8080")

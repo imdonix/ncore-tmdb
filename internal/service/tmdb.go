@@ -1,9 +1,10 @@
-package tmdb
+package service
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,8 +13,14 @@ import (
 var apiKey string
 var baseURL = "https://api.themoviedb.org/3"
 
-func Init(key string) {
-	apiKey = key
+func InitTMDB() {
+
+	tmdbAPIKey := os.Getenv("TMDB_API_KEY")
+	if tmdbAPIKey == "" {
+		log.Fatal("TMDB_API_KEY environment variable required")
+	}
+
+	apiKey = tmdbAPIKey
 }
 
 func fetchTMDB(endpoint string, params url.Values) ([]byte, error) {
@@ -44,7 +51,7 @@ func fetchTMDB(endpoint string, params url.Values) ([]byte, error) {
 	return data, nil
 }
 
-func GetMovieDetails(tmdbID int) (map[string]any, error) {
+func GetMovieDetailsTMDB(tmdbID int) (map[string]any, error) {
 	data, err := fetchTMDB(fmt.Sprintf("/movie/%d", tmdbID), nil)
 	if err != nil {
 		return nil, err
@@ -59,7 +66,7 @@ func GetMovieDetails(tmdbID int) (map[string]any, error) {
 	return details, nil
 }
 
-func GetTVDetails(tmdbID int) (map[string]any, error) {
+func GetTVDetailsTMDB(tmdbID int) (map[string]any, error) {
 	data, err := fetchTMDB(fmt.Sprintf("/tv/%d", tmdbID), nil)
 	if err != nil {
 		return nil, err

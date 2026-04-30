@@ -5,27 +5,13 @@ import (
 	"net/http"
 	"strconv"
 
-	"media-manager/internal/database"
-	"media-manager/internal/tmdb"
-
 	"github.com/gin-gonic/gin"
+
+	"media-manager/internal/database"
+	"media-manager/internal/service"
 )
 
-func SetupAPI(r *gin.Engine) {
-	api := r.Group("/api")
-	{
-		api.GET("/health", healthCheck)
-		api.GET("/:type/:tmdbID", fetchMovie)
-	}
-}
-
-func healthCheck(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status": "ok",
-	})
-}
-
-func fetchMovie(c *gin.Context) {
+func fetch(c *gin.Context) {
 	idStr := c.Param("tmdbID")
 	tmdbID, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -37,13 +23,13 @@ func fetchMovie(c *gin.Context) {
 	var details map[string]any
 
 	switch contentType {
-		case "movie":
-			details, err = tmdb.GetMovieDetails(tmdbID)
-		case "tv":
-			details, err = tmdb.GetTVDetails(tmdbID)
-		default:
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid type"})
-			return
+	case "movie":
+		details, err = service.GetMovieDetailsTMDB(tmdbID)
+	case "tv":
+		details, err = service.GetTVDetailsTMDB(tmdbID)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid type"})
+		return
 	}
 
 	if err != nil {
@@ -74,8 +60,8 @@ func fetchMovie(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"tmdbID": tmdbID,
-		"type":   contentType,
+		"tmdbID":   tmdbID,
+		"type":     contentType,
 		"metadata": details,
 	})
 }

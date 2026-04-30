@@ -1,0 +1,22 @@
+services:
+  ncore:
+    image: imdonix/ncore
+    container_name: ncore
+    ports:
+      - "1001:8080"
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  media-manager:
+    build: .
+    container_name: media-manager
+    networks:
+      - app-network
+    depends_on:
+      - ncore
+    tty: true
+
+networks:
+  app-network:
+    driver: bridge
