@@ -8,6 +8,25 @@ services:
       - app-network
     restart: unless-stopped
 
+  qbit:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbit
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - WEBUI_PORT=1002
+    volumes:
+      - ./tmp/qbit_config:/config
+      - ./tmp/qbit_downloads:/downloads
+    ports:
+      - "1002:1002"
+      - "6881:6881"
+      - "6881:6881/udp"
+    networks:
+      - app-network
+    restart: unless-stopped
+
   media-manager:
     build: .
     container_name: media-manager
@@ -15,6 +34,7 @@ services:
       - app-network
     depends_on:
       - ncore
+      - qbit
     tty: true
 
 networks:

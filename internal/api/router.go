@@ -10,5 +10,6 @@ func RegisterRoutes(r *gin.Engine) {
 		api.GET("/health", healthCheck)
 		api.GET("/:type/:tmdbID", fetch)
 		api.GET("/download/:id", download)
+		api.GET("/qbit/download/:id", qbitDownload)
 	}
 }

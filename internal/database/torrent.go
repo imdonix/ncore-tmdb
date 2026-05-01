@@ -59,3 +59,13 @@ func GetTorrentsByContent(tmdbID int, contentType string) ([]Torrent, error) {
 	}
 	return list, nil
 }
+
+func GetTorrent(id string) (*Torrent, error) {
+	row := DB.QueryRow("SELECT id, title, key, type, date, seeders, leechers, completed, download_url, provider, tmdb_id, content_type FROM torrent WHERE id = ?", id)
+	t := &Torrent{}
+	err := row.Scan(&t.ID, &t.Title, &t.Key, &t.Type, &t.Date, &t.Seeders, &t.Leechers, &t.Completed, &t.DownloadURL, &t.Provider, &t.TMDBID, &t.ContentType)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}

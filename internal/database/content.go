@@ -42,6 +42,11 @@ func GetContent(tmdbID int, contentType string) (*Content, error) {
 	return c, err
 }
 
+func UpdateContentProgress(tmdbID int, contentType string, progress string) error {
+	_, err := DB.Exec("UPDATE content SET progress = ? WHERE tmdb_id = ? AND type = ?", progress, tmdbID, contentType)
+	return err
+}
+
 func ListContent() ([]Content, error) {
 	rows, err := DB.Query("SELECT tmdb_id, type, name, release_date, progress FROM content")
 	if err != nil {

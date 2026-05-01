@@ -42,10 +42,46 @@
         color: #fff;
         text-decoration: none;
         font-size: 14px;
+        flex-grow: 1;
     }
 
     .torrent-item a:hover {
         text-decoration: underline;
+    }
+
+    .download-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .action-btn {
+        background: none;
+        border: none;
+        color: #3498db;
+        cursor: pointer;
+        padding: 0;
+        font-size: 12px;
+    }
+
+    .action-btn:hover {
+        text-decoration: underline;
+    }
+
+    .fallback-link {
+        color: #95a5a6;
+        font-size: 12px;
+        text-decoration: none;
+    }
+
+    .fallback-link:hover {
+        text-decoration: underline;
+    }
+
+    .status-msg {
+        font-size: 12px;
+        color: #2ecc71;
+        margin-left: 8px;
     }
 </style>
 
@@ -67,6 +103,7 @@
             const [torrents, setTorrents] = useState([]);
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
+            const [status, setStatus] = useState({});
 
             useEffect(() => {
                 const fetchTorrents = async () => {
@@ -74,7 +111,6 @@
                         const resp = await fetch(URL_FETCH);
                         if (!resp.ok) throw new Error('Network response was not ok');
                         const data = await resp.json();
-                        console.log(data);
                         setTorrents(data.torrents || []);
                         setLoading(false);
                     } catch (err) {
@@ -85,6 +121,21 @@
                 };
                 fetchTorrents();
             }, []);
+
+            const handleDownload = async (id) => {
+                try {
+                    setStatus({ ...status, [id]: 'Scheduling...' });
+                    const resp = await fetch(`/api/qbit/download/${id}`);
+                    if (!resp.ok) {
+                        const data = await resp.json();
+                        throw new Error(data.error || 'Failed to schedule');
+                    }
+                    setStatus({ ...status, [id]: 'Scheduled!' });
+                } catch (err) {
+                    console.error('Failed to schedule download:', err);
+                    setStatus({ ...status, [id]: `Error: ${err.message}` });
+                }
+            };
 
           if (loading) {
               return html`
@@ -111,15 +162,24 @@
                                 alt=${t.Provider || ''}
                                 title=${t.Provider || ''}
                             />
-                            <h4>
+                            <a
+                                href="javascript:void(0)"
+                                onClick=${() => handleDownload(t.ID)}
+                            >
+                                ${t.Title} [S:${t.Seeders} L:${t.Leechers}]
+                            </a>
+                            <div class="download-actions">
                                 <a
+                                    class="fallback-link"
                                     href=${`/api/download/${t.ID}`}
                                     target="_blank"
                                     rel="noopener"
+                                    title="Download .torrent file"
                                 >
-                                    ${t.Title} [S:${t.Seeders} L:${t.Leechers}]
+                                    💾
                                 </a>
-                            </h4>
+                                ${status[t.ID] && html`<span class="status-msg">${status[t.ID]}</span>`}
+                            </div>
                         </div>`
                     )}
                 </div>

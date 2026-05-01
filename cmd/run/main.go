@@ -34,6 +34,7 @@ func main() {
 	service.InitTMDB()
 	service.InitNCore()
 	service.InitProxy()
+	service.InitQbit()
 
 	r := gin.Default()
 
