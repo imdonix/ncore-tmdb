@@ -10,6 +10,7 @@ type Torrent struct {
 	Leechers    int    `json:"Leechers"`
 	Completed   int    `json:"Completed"`
 	DownloadURL string `json:"Download"`
+	Provider    string `json:"Provider"`
 	TMDBID      int    `json:"-"`
 	ContentType string `json:"-"`
 }
@@ -26,6 +27,7 @@ func CreateTorrentTable() error {
 		leechers INTEGER,
 		completed INTEGER,
 		download_url TEXT,
+		provider TEXT,
 		tmdb_id INTEGER NOT NULL,
 		content_type TEXT NOT NULL,
 		PRIMARY KEY (id, tmdb_id, content_type)
@@ -35,13 +37,13 @@ func CreateTorrentTable() error {
 }
 
 func InsertTorrent(t *Torrent) error {
-	_, err := DB.Exec("INSERT OR REPLACE INTO torrent (id, title, key, type, date, seeders, leechers, completed, download_url, tmdb_id, content_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		t.ID, t.Title, t.Key, t.Type, t.Date, t.Seeders, t.Leechers, t.Completed, t.DownloadURL, t.TMDBID, t.ContentType)
+	_, err := DB.Exec("INSERT OR REPLACE INTO torrent (id, title, key, type, date, seeders, leechers, completed, download_url, provider, tmdb_id, content_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		t.ID, t.Title, t.Key, t.Type, t.Date, t.Seeders, t.Leechers, t.Completed, t.DownloadURL, t.Provider, t.TMDBID, t.ContentType)
 	return err
 }
 
 func GetTorrentsByContent(tmdbID int, contentType string) ([]Torrent, error) {
-	rows, err := DB.Query("SELECT id, title, key, type, date, seeders, leechers, completed, download_url, tmdb_id, content_type FROM torrent WHERE tmdb_id = ? AND content_type = ?", tmdbID, contentType)
+	rows, err := DB.Query("SELECT id, title, key, type, date, seeders, leechers, completed, download_url, provider, tmdb_id, content_type FROM torrent WHERE tmdb_id = ? AND content_type = ?", tmdbID, contentType)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +52,7 @@ func GetTorrentsByContent(tmdbID int, contentType string) ([]Torrent, error) {
 	var list []Torrent
 	for rows.Next() {
 		var t Torrent
-		if err := rows.Scan(&t.ID, &t.Title, &t.Key, &t.Type, &t.Date, &t.Seeders, &t.Leechers, &t.Completed, &t.DownloadURL, &t.TMDBID, &t.ContentType); err != nil {
+		if err := rows.Scan(&t.ID, &t.Title, &t.Key, &t.Type, &t.Date, &t.Seeders, &t.Leechers, &t.Completed, &t.DownloadURL, &t.Provider, &t.TMDBID, &t.ContentType); err != nil {
 			return nil, err
 		}
 		list = append(list, t)

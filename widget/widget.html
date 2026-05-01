@@ -26,6 +26,18 @@
         color: #999;
     }
 
+    .torrent-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .provider-icon {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+    }
+
     .torrent-item a {
         color: #fff;
         text-decoration: none;
@@ -43,6 +55,10 @@
     import htm from 'https://esm.sh/htm';
 
     const html = htm.bind(h);
+
+    const PROVIDER_ICONS = {
+        NCORE: '/widget/ncore.png'
+    };
 
     const URL_FETCH = `/api/#CONTENT_TYPE#/#CONTENT_TMDBID#`;
 
@@ -88,7 +104,13 @@
             return html`
                 <div id="torrent-list">
                     ${torrents.map((t) =>
-                        html`<div key=${t.id} class="torrent-item">
+                        html`<div key=${t.ID} class="torrent-item">
+                            <img
+                                class="provider-icon"
+                                src=${PROVIDER_ICONS[t.Provider] || ''}
+                                alt=${t.Provider || ''}
+                                title=${t.Provider || ''}
+                            />
                             <h4>
                                 <a
                                     href=${`/api/download/${t.ID}`}
