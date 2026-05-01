@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -12,6 +13,8 @@ import (
 	"media-manager/internal/database"
 	"media-manager/internal/service"
 )
+
+var specialCharsRegex = regexp.MustCompile(`[,:;!@#$%^&*()+=\[\]{}|\\/"'<>?~` + "`" + `]+`)
 
 func fetch(c *gin.Context) {
 	idStr := c.Param("tmdbID")
@@ -121,6 +124,7 @@ func fetch(c *gin.Context) {
 
 	searchPattern := fmt.Sprintf("%s %s", name, year)
 	searchPattern = strings.ToLower(searchPattern)
+	searchPattern = specialCharsRegex.ReplaceAllString(searchPattern, "")
 
 	// 2. Fetch from multiple torrent providers and write to DB
 	// Add your new providers to this list as you build them in the service package
