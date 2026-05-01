@@ -70,10 +70,10 @@ func fetch(c *gin.Context) {
 	var details map[string]any
 
 	switch contentType {
-	case "movie":
-		details, err = service.GetMovieDetailsTMDB(tmdbID)
-	case "tv":
-		details, err = service.GetTVDetailsTMDB(tmdbID)
+		case "movie":
+			details, err = service.GetMovieDetailsTMDB(tmdbID)
+		case "tv":
+			details, err = service.GetTVDetailsTMDB(tmdbID)
 	}
 
 	if err != nil {
@@ -90,12 +90,17 @@ func fetch(c *gin.Context) {
 		releaseDate = fmt.Sprintf("%v", details["first_air_date"])
 	}
 
+	progress := "FETCHED"
+	if existingContent != nil {
+		progress = existingContent.Progress
+	}
+
 	content := &database.Content{
 		TMDBID:      tmdbID,
 		Type:        contentType,
 		Name:        name,
 		ReleaseDate: releaseDate,
-		Progress:    "FETCHED",
+		Progress:    progress,
 	}
 
 	err = database.InsertContent(content)
@@ -182,10 +187,32 @@ func fetch(c *gin.Context) {
 		return
 	}
 
+	// Fetch active downloads from qbit to show progress
+	qbitTorrents, _ := service.GetTorrentsStatus()
+	downloadingID, _ := database.GetContentKV(tmdbID, contentType, "downloading_torrent_id")
+
+	var activeDownload map[string]any
+	if downloadingID != "" {
+		// Try to find the torrent in qbit by name/hash matching if possible,
+		// but since we don't store hash yet, we'll look for similar name or just return the first one if we only expect one.
+		// For now, let's just find if any torrent in qbit matches any of our known torrent IDs in the title (filename was ID.torrent)
+		for _, qt := range qbitTorrents {
+			if strings.Contains(qt.Name, downloadingID) {
+				activeDownload = map[string]any{
+					"id":       downloadingID,
+					"progress": qt.Progress * 100,
+					"status":   qt.Status,
+				}
+				break
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"tmdbID":   tmdbID,
-		"type":     contentType,
-		"metadata": details,
-		"torrents": dbTorrents, // Served directly from the DB source of truth
+		"tmdbID":         tmdbID,
+		"type":           contentType,
+		"metadata":       details,
+		"torrents":       dbTorrents,
+		"activeDownload": activeDownload,
 	})
 }

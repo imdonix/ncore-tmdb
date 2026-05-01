@@ -32,7 +32,12 @@ func qbitDownload(c *gin.Context) {
 	}
 
 	// 3. Add to qbittorrent
-	err = service.AddTorrent(data, fmt.Sprintf("%s.torrent", id))
+	filename := t.Title
+	if filename == "" {
+		filename = id
+	}
+
+	err = service.AddTorrent(data, fmt.Sprintf("%s.torrent", filename))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to add torrent to qbittorrent: %v", err)})
 		return
@@ -44,9 +49,8 @@ func qbitDownload(c *gin.Context) {
 		fmt.Printf("Warning: failed to update content progress: %v\n", err)
 	}
 
-	// Store what torrent is being downloaded - for now we can use a KV or just rely on the fact that progress is DOWNLOADING
-	// The prompt said: "it should also somehow store what torrent is being donwloaded"
-	database.SetContentKV(t.TMDBID, t.ContentType, "downloading_torrent_id", id)
+	// Store what torrent is being downloaded - we use the title for qbit matching
+	database.SetContentKV(t.TMDBID, t.ContentType, "downloading_torrent_id", filename)
 
 	c.JSON(http.StatusOK, gin.H{"message": "scheduled download in qbittorrent"})
 }

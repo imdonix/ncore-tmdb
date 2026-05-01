@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -102,4 +103,35 @@ func AddTorrent(torrentData []byte, filename string) error {
 	}
 
 	return nil
+}
+
+type QbitTorrent struct {
+	Hash     string  `json:"hash"`
+	Name     string  `json:"name"`
+	Progress float64 `json:"progress"`
+	Status   string  `json:"state"`
+}
+
+func GetTorrentsStatus() ([]QbitTorrent, error) {
+	if err := qbitLogin(); err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("%s/api/v2/torrents/info", qbitHost)
+	resp, err := qbitClient.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get torrents info: %s", resp.Status)
+	}
+
+	var torrents []QbitTorrent
+	if err := json.NewDecoder(resp.Body).Decode(&torrents); err != nil {
+		return nil, err
+	}
+
+	return torrents, nil
 }

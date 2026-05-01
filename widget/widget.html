@@ -1,11 +1,161 @@
-<div class="panel top_billed scroller">
+<section class="panel top_billed scroller">
     <h3 dir="auto">Download using Torrent</h3>
     <div class="season card">
-        <div class="content">
-            <div id="widget-torrent"></div>
+        <div id="widget-torrent" class="content" >
         </div>
     </div>
 </div>
+
+<script type="module">
+    import { h, render } from 'https://esm.sh/preact';
+    import { useState, useEffect, useRef } from 'https://esm.sh/preact/hooks';
+    import htm from 'https://esm.sh/htm';
+
+    const html = htm.bind(h);
+
+    const PROVIDER_ICONS = {
+        NCORE: '/widget/ncore.png'
+    };
+
+    const URL_FETCH = `/api/#CONTENT_TYPE#/#CONTENT_TMDBID#`;
+
+    (() => {
+        function TorrentWidget() {
+            const [data, setData] = useState({ torrents: [], activeDownload: null });
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [localScheduling, setLocalScheduling] = useState(null);
+            const pollInterval = useRef(null);
+
+            const fetchTorrents = async () => {
+                try {
+                    const resp = await fetch(URL_FETCH);
+                    if (!resp.ok) throw new Error('Network response was not ok');
+                    const json = await resp.json();
+
+                    setData(json);
+                    setLoading(false);
+
+                    // If we see an active download from the server, clear our local optimistic state
+                    if (json.activeDownload) {
+                        setLocalScheduling(null);
+                    }
+
+                    if (json.activeDownload && !pollInterval.current) {
+                        startPolling();
+                    } else if (!json.activeDownload && pollInterval.current) {
+                        stopPolling();
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch torrents:', err);
+                    setError(err.message);
+                    setLoading(false);
+                }
+            };
+
+            const startPolling = () => {
+                if (pollInterval.current) return;
+                pollInterval.current = setInterval(fetchTorrents, 5000);
+            };
+
+            const stopPolling = () => {
+                if (pollInterval.current) {
+                    clearInterval(pollInterval.current);
+                    pollInterval.current = null;
+                }
+            };
+
+            useEffect(() => {
+                fetchTorrents();
+                return () => stopPolling();
+            }, []);
+
+            const handleAction = async (e, t) => {
+                if (e.ctrlKey) {
+                    // Direct download
+                    window.open(`/api/download/${t.ID}`, '_blank');
+                    return;
+                }
+
+                try {
+                    // Instant feedback: set local optimistic state
+                    setLocalScheduling(t.Title);
+
+                    const resp = await fetch(`/api/qbit/download/${t.ID}`);
+                    if (!resp.ok) {
+                        const errData = await resp.json();
+                        throw new Error(errData.error || 'Failed to schedule');
+                    }
+
+                    // Trigger immediate refresh and start polling
+                    fetchTorrents();
+                    startPolling();
+                } catch (err) {
+                    console.error('Failed to schedule download:', err);
+                    alert(`Error: ${err.message}`);
+                    setLocalScheduling(null);
+                }
+            };
+
+          if (loading) {
+              return html`
+                  <div class="loading">
+                      <span>Loading torrents...</span>
+                  </div>`;
+          }
+
+            if (error) {
+                return html`<div class="error">Error loading torrents: ${error}</div>`;
+            }
+
+            const { torrents, activeDownload } = data;
+
+            if (torrents.length === 0) {
+                return html`<div class="empty">No torrents found.</div>`;
+            }
+
+            return html`
+                <div id="torrents" class="torrent-list">
+                    ${torrents.map((t) => {
+                        const isDownloading = activeDownload && activeDownload.id === t.Title;
+                        const isScheduling = localScheduling === t.Title;
+
+                        return html`<div key=${t.ID} class="torrent-item">
+                            <img
+                                class="provider-icon"
+                                src=${PROVIDER_ICONS[t.Provider] || ''}
+                                alt=${t.Provider || ''}
+                                title=${t.Provider || ''}
+                            />
+                            <a
+                                href="javascript:void(0)"
+                                onClick=${(e) => handleAction(e, t)}
+                                style="${isScheduling ? 'opacity: 0.5; cursor: wait;' : ''}"
+                                title="Click to schedule download, Ctrl+Click to download file"
+                            >
+                                ${t.Title} [S:${t.Seeders} L:${t.Leechers}]
+                            </a>
+                            ${isDownloading && html`
+                                <div class="progress-container" title="${activeDownload.status}">
+                                    <div class="progress-bar" style="width: ${activeDownload.progress}%"></div>
+                                    <div class="progress-text">${Math.round(activeDownload.progress)}%</div>
+                                </div>
+                            `}
+                            ${isScheduling && !isDownloading && html`
+                                <div class="progress-container" title="Scheduling...">
+                                    <div class="progress-bar shim" style="width: 100%"></div>
+                                    <div class="progress-text">...</div>
+                                </div>
+                            `}
+                        </div>`;
+                    })}
+                </div>
+            `;
+        }
+
+        render(html`<${TorrentWidget} />`, document.getElementById('widget-torrent'));
+    })();
+</script>
 
 <style>
     .loading {
@@ -24,6 +174,10 @@
     .empty {
         padding: 20px;
         color: #999;
+    }
+
+    .torrent-list {
+        width: 100%;
     }
 
     .torrent-item {
@@ -49,143 +203,43 @@
         text-decoration: underline;
     }
 
-    .download-actions {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-    }
-
-    .action-btn {
-        background: none;
-        border: none;
-        color: #3498db;
-        cursor: pointer;
-        padding: 0;
-        font-size: 12px;
-    }
-
-    .action-btn:hover {
-        text-decoration: underline;
-    }
-
-    .fallback-link {
-        color: #95a5a6;
-        font-size: 12px;
-        text-decoration: none;
-    }
-
-    .fallback-link:hover {
-        text-decoration: underline;
-    }
-
-    .status-msg {
-        font-size: 12px;
-        color: #2ecc71;
+    .progress-container {
+        width: 80px;
+        background-color: #333;
+        border-radius: 4px;
+        height: 14px;
+        position: relative;
+        overflow: hidden;
+        flex-shrink: 0;
         margin-left: 8px;
     }
+
+    .progress-bar {
+        height: 100%;
+        background-color: #2ecc71;
+        transition: width 0.3s ease;
+    }
+
+    .progress-bar.shim {
+        background: linear-gradient(90deg, #2ecc71 0%, #27ae60 50%, #2ecc71 100%);
+        background-size: 200% 100%;
+        animation: shimmy 2s infinite linear;
+    }
+
+    @keyframes shimmy {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    .progress-text {
+        position: absolute;
+        width: 100%;
+        text-align: center;
+        top: 0;
+        left: 0;
+        line-height: 14px;
+        font-size: 10px;
+        color: #fff;
+        font-weight: bold;
+    }
 </style>
-
-<script type="module">
-    import { h, render } from 'https://esm.sh/preact';
-    import { useState, useEffect } from 'https://esm.sh/preact/hooks';
-    import htm from 'https://esm.sh/htm';
-
-    const html = htm.bind(h);
-
-    const PROVIDER_ICONS = {
-        NCORE: '/widget/ncore.png'
-    };
-
-    const URL_FETCH = `/api/#CONTENT_TYPE#/#CONTENT_TMDBID#`;
-
-    (() => {
-        function TorrentWidget() {
-            const [torrents, setTorrents] = useState([]);
-            const [loading, setLoading] = useState(true);
-            const [error, setError] = useState(null);
-            const [status, setStatus] = useState({});
-
-            useEffect(() => {
-                const fetchTorrents = async () => {
-                    try {
-                        const resp = await fetch(URL_FETCH);
-                        if (!resp.ok) throw new Error('Network response was not ok');
-                        const data = await resp.json();
-                        setTorrents(data.torrents || []);
-                        setLoading(false);
-                    } catch (err) {
-                        console.error('Failed to fetch torrents:', err);
-                        setError(err.message);
-                        setLoading(false);
-                    }
-                };
-                fetchTorrents();
-            }, []);
-
-            const handleDownload = async (id) => {
-                try {
-                    setStatus({ ...status, [id]: 'Scheduling...' });
-                    const resp = await fetch(`/api/qbit/download/${id}`);
-                    if (!resp.ok) {
-                        const data = await resp.json();
-                        throw new Error(data.error || 'Failed to schedule');
-                    }
-                    setStatus({ ...status, [id]: 'Scheduled!' });
-                } catch (err) {
-                    console.error('Failed to schedule download:', err);
-                    setStatus({ ...status, [id]: `Error: ${err.message}` });
-                }
-            };
-
-          if (loading) {
-              return html`
-                  <div class="loading">
-                      <span>Loading torrents...</span>
-                  </div>`;
-          }
-
-            if (error) {
-                return html`<div class="error">Error loading torrents: ${error}</div>`;
-            }
-
-            if (torrents.length === 0) {
-                return html`<div class="empty">No torrents found.</div>`;
-            }
-
-            return html`
-                <div id="torrent-list">
-                    ${torrents.map((t) =>
-                        html`<div key=${t.ID} class="torrent-item">
-                            <img
-                                class="provider-icon"
-                                src=${PROVIDER_ICONS[t.Provider] || ''}
-                                alt=${t.Provider || ''}
-                                title=${t.Provider || ''}
-                            />
-                            <a
-                                href="javascript:void(0)"
-                                onClick=${() => handleDownload(t.ID)}
-                            >
-                                ${t.Title} [S:${t.Seeders} L:${t.Leechers}]
-                            </a>
-                            <div class="download-actions">
-                                <a
-                                    class="fallback-link"
-                                    href=${`/api/download/${t.ID}`}
-                                    target="_blank"
-                                    rel="noopener"
-                                    title="Download .torrent file"
-                                >
-                                    💾
-                                </a>
-                                ${status[t.ID] && html`<span class="status-msg">${status[t.ID]}</span>`}
-                            </div>
-                        </div>`
-                    )}
-                </div>
-            `;
-        }
-
-        render(html`<${TorrentWidget} />`, document.getElementById('widget-torrent'));
-    })();
-</script>

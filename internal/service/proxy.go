@@ -106,7 +106,7 @@ func modifyContent(body []byte, tmdbID string, contentType string) []byte {
 	doc.Find("footer").Remove()
 	doc.Find("section.inner_content.bg_image.community").Remove()
 
-	if tmdbID != "" && contentType != "" {
+	if tmdbID != "" && contentType != "" && contentType != "tv" {
 		w := widgetContent
 		w = strings.ReplaceAll(w, "#CONTENT_TMDBID#", tmdbID)
 		w = strings.ReplaceAll(w, "#CONTENT_TYPE#", contentType)

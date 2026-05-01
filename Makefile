@@ -5,11 +5,11 @@ CMD_PATH=./cmd/run
 export PATH := $(HOME)/go/bin:$(PATH)
 
 run:
-	go run $(CMD_PATH)
+	GIN_MODE=release go run $(CMD_PATH)
 
 build:
 	mkdir -p bin
-	go build -o $(BINARY_NAME) $(CMD_PATH)
+	CGO_ENABLED=0 go build -ldflags="-s -w" -o $(BINARY_NAME) $(CMD_PATH)
 
 dev:
 	air

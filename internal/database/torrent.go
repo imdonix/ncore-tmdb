@@ -49,7 +49,7 @@ func GetTorrentsByContent(tmdbID int, contentType string) ([]Torrent, error) {
 	}
 	defer rows.Close()
 
-	var list []Torrent
+	var list = make([]Torrent, 0)
 	for rows.Next() {
 		var t Torrent
 		if err := rows.Scan(&t.ID, &t.Title, &t.Key, &t.Type, &t.Date, &t.Seeders, &t.Leechers, &t.Completed, &t.DownloadURL, &t.Provider, &t.TMDBID, &t.ContentType); err != nil {
