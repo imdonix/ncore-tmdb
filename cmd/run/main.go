@@ -27,6 +27,10 @@ func main() {
 		log.Fatal("Failed to create content table:", err)
 	}
 
+	if err := database.CreateTorrentTable(); err != nil {
+		log.Fatal("Failed to create torrent table:", err)
+	}
+
 	service.InitTMDB()
 	service.InitNCore()
 	service.InitProxy()

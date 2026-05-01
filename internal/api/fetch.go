@@ -90,28 +90,29 @@ func fetch(c *gin.Context) {
 		fmt.Printf("NCore search failed: %v\n", err)
 	}
 
+	for _, t := range torrents {
+		torrent := &database.Torrent{
+			ID:          t.ID,
+			Title:       t.Title,
+			Key:         t.Key,
+			Type:        t.Type,
+			Date:        t.Date,
+			Seeders:     t.Seeders,
+			Leechers:    t.Leechers,
+			Completed:   t.Completed,
+			DownloadURL: t.DownloadURL,
+			TMDBID:      tmdbID,
+			ContentType: contentType,
+		}
+		if err := database.InsertTorrent(torrent); err != nil {
+			fmt.Printf("Failed to insert torrent %s: %v\n", t.ID, err)
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"tmdbID":   tmdbID,
 		"type":     contentType,
 		"metadata": details,
 		"torrents": torrents,
 	})
-}
-
-func download(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing torrent id"})
-		return
-	}
-
-	data, err := service.DownloadTorrent(id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to download torrent"})
-		return
-	}
-
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s.torrent", id))
-	c.Header("Content-Type", "application/x-bittorrent")
-	c.Data(http.StatusOK, "application/x-bittorrent", data)
 }
