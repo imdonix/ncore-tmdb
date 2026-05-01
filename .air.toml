@@ -1,5 +1,5 @@
 root = "."
-tmp_dir = "tmp"
+tmp_dir = "air"
 
 [build]
   cmd = "go build -o ./bin/media-manager ./cmd/run/"

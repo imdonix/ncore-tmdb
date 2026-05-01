@@ -1,5 +1,6 @@
 bin/
 tmp/
+air/
 *.exe
 *.out
 *.db
