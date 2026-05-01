@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -21,6 +22,48 @@ func fetch(c *gin.Context) {
 	}
 
 	contentType := c.Param("type")
+	if contentType != "movie" && contentType != "tv" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid type"})
+		return
+	}
+
+	// Check if content is already fetched (cached)
+	existingContent, err := database.GetContent(tmdbID, contentType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check content cache"})
+		return
+	}
+
+	if existingContent != nil && existingContent.Progress == "FETCHED" {
+		// Serve from cache
+		metadataStr, err := database.GetContentKV(tmdbID, contentType, "metadata")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch cached metadata"})
+			return
+		}
+
+		var details map[string]any
+		if metadataStr != "" {
+			json.Unmarshal([]byte(metadataStr), &details)
+		}
+
+		torrents, err := database.GetTorrentsByContent(tmdbID, contentType)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch cached torrents"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"tmdbID":   tmdbID,
+			"type":     contentType,
+			"metadata": details,
+			"torrents": torrents,
+			"cached":   true,
+		})
+		return
+	}
+
+	// Fetch from APIs
 	var details map[string]any
 
 	switch contentType {
@@ -28,9 +71,6 @@ func fetch(c *gin.Context) {
 		details, err = service.GetMovieDetailsTMDB(tmdbID)
 	case "tv":
 		details, err = service.GetTVDetailsTMDB(tmdbID)
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid type"})
-		return
 	}
 
 	if err != nil {
@@ -52,6 +92,7 @@ func fetch(c *gin.Context) {
 		Type:        contentType,
 		Name:        name,
 		ReleaseDate: releaseDate,
+		Progress:    "FETCHED",
 	}
 
 	err = database.InsertContent(content)
@@ -69,6 +110,10 @@ func fetch(c *gin.Context) {
 		}
 	}
 
+	// Store full metadata as JSON for cache
+	metadataJSON, _ := json.Marshal(details)
+	database.SetContentKV(tmdbID, contentType, "metadata", string(metadataJSON))
+
 	// NCore search
 	year := ""
 	if len(releaseDate) >= 4 {
@@ -80,7 +125,7 @@ func fetch(c *gin.Context) {
 
 	torrents, err := service.SearchNCore(service.SearchRequest{
 		Pattern:   searchPattern,
-		Type:      "all_own", // Default to all_own
+		Type:      "all_own",
 		Where:     "name",
 		SortBy:    "seeders",
 		SortOrder: "desc",

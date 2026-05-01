@@ -1,17 +1,17 @@
 package database
 
 type Torrent struct {
-	ID          string
-	Title       string
-	Key         string
-	Type        string
-	Date        string
-	Seeders     int
-	Leechers    int
-	Completed   int
-	DownloadURL string
-	TMDBID      int
-	ContentType string
+	ID          string `json:"ID"`
+	Title       string `json:"Title"`
+	Key         string `json:"Key"`
+	Type        string `json:"Type"`
+	Date        string `json:"Date"`
+	Seeders     int    `json:"Seeders"`
+	Leechers    int    `json:"Leechers"`
+	Completed   int    `json:"Completed"`
+	DownloadURL string `json:"Download"`
+	TMDBID      int    `json:"-"`
+	ContentType string `json:"-"`
 }
 
 func CreateTorrentTable() error {

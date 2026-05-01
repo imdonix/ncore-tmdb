@@ -7,6 +7,36 @@
     </div>
 </div>
 
+<style>
+    .loading {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 20px;
+        color: #999;
+    }
+
+    .error {
+        padding: 20px;
+        color: #e74c3c;
+    }
+
+    .empty {
+        padding: 20px;
+        color: #999;
+    }
+
+    .torrent-item a {
+        color: #fff;
+        text-decoration: none;
+        font-size: 14px;
+    }
+
+    .torrent-item a:hover {
+        text-decoration: underline;
+    }
+</style>
+
 <script type="module">
     import { h, render } from 'https://esm.sh/preact';
     import { useState, useEffect } from 'https://esm.sh/preact/hooks';
@@ -23,26 +53,29 @@
             const [error, setError] = useState(null);
 
             useEffect(() => {
-                fetch(URL_FETCH)
-                    .then((resp) => {
+                const fetchTorrents = async () => {
+                    try {
+                        const resp = await fetch(URL_FETCH);
                         if (!resp.ok) throw new Error('Network response was not ok');
-                        return resp.json();
-                    })
-                    .then((data) => {
-                        console.log(data)
+                        const data = await resp.json();
+                        console.log(data);
                         setTorrents(data.torrents || []);
                         setLoading(false);
-                    })
-                    .catch((err) => {
+                    } catch (err) {
                         console.error('Failed to fetch torrents:', err);
                         setError(err.message);
                         setLoading(false);
-                    });
+                    }
+                };
+                fetchTorrents();
             }, []);
 
-            if (loading) {
-                return html`<div class="loading">Loading torrents...</div>`;
-            }
+          if (loading) {
+              return html`
+                  <div class="loading">
+                      <span>Loading torrents...</span>
+                  </div>`;
+          }
 
             if (error) {
                 return html`<div class="error">Error loading torrents: ${error}</div>`;
