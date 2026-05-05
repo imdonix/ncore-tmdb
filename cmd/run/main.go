@@ -37,6 +37,7 @@ func main() {
 	service.InitQbit()
 
 	r := gin.Default()
+	r.SetTrustedProxies(nil)
 
 	r.Static("/widget", "./widget")
 
