@@ -39,11 +39,9 @@ func main() {
 
 	r := gin.Default()
 
-	secureMiddleware := secure.New(secure.Config{
-        AllowedHosts: []string{},
-    })
-
-	r.Use(secureMiddleware)
+	r.Use(secure.New(secure.Config{
+		IsDevelopment: true,
+	}))
 
 	r.Static("/widget", "./widget")
 
