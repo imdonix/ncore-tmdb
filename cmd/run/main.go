@@ -40,6 +40,7 @@ func main() {
 	r := gin.Default()
 
 	r.Use(secure.New(secure.Config{
+		AllowedHosts:     []string{"localhost", "tmdb.local"},
 		IsDevelopment: true,
 	}))
 
