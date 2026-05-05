@@ -1,0 +1,25 @@
+replicaCount: 1
+
+ncoreTmdb:
+  image:
+    repository: imdonix/ncore-tmdb
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  env:
+    ncoreHost: "http://ncore:8080"
+    qbitHost: "http://external-qbit:1002"
+    tmdbApiKey: "your-api-key"
+    existingSecret: "ncore-tmdb-secrets"
+
+ncore:
+  enabled: true
+  image:
+    repository: imdonix/ncore
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080

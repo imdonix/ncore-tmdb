@@ -1,4 +1,4 @@
-module media-manager
+module ncore-tmdb
 
 go 1.25.5
 

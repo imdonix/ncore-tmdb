@@ -10,8 +10,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"media-manager/internal/database"
-	"media-manager/internal/service"
+	"ncore-tmdb/internal/database"
+	"ncore-tmdb/internal/service"
 )
 
 var specialCharsRegex = regexp.MustCompile(`[,:;!@#$%^&*()+=\[\]{}|\\/"'<>?~` + "`" + `]+`)
@@ -168,7 +168,6 @@ func fetch(c *gin.Context) {
 				Date:        t.Date,
 				Seeders:     t.Seeders,
 				Leechers:    t.Leechers,
-				Completed:   t.Completed,
 				DownloadURL: t.DownloadURL,
 				Provider:    provider, // Dynamically tag the provider
 				TMDBID:      tmdbID,

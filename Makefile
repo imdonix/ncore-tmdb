@@ -1,11 +1,8 @@
 .PHONY: run build install-air dev clean
 
-BINARY_NAME=bin/media-manager
+BINARY_NAME=bin/ncore-tmdb
 CMD_PATH=./cmd/run
 export PATH := $(HOME)/go/bin:$(PATH)
-
-run:
-	GIN_MODE=release go run $(CMD_PATH)
 
 build:
 	mkdir -p bin
@@ -13,6 +10,9 @@ build:
 
 dev:
 	air
+
+docker:
+	docker build -t ncore-tmdb .
 
 clean:
 	rm -rf bin/
