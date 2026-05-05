@@ -121,30 +121,41 @@
                         const isScheduling = localScheduling === t.Title;
 
                         return html`<div key=${t.ID} class="torrent-item">
-                            <img
-                                class="provider-icon"
-                                src=${PROVIDER_ICONS[t.Provider] || ''}
-                                alt=${t.Provider || ''}
-                                title=${t.Provider || ''}
-                            />
-                            <a
-                                href="javascript:void(0)"
-                                onClick=${(e) => handleAction(e, t)}
-                                style="${isScheduling ? 'opacity: 0.5; cursor: wait;' : ''}"
-                                title="Click to schedule download, Ctrl+Click to download file"
-                            >
-                                ${t.Title} [S:${t.Seeders} L:${t.Leechers}]
-                            </a>
-                            ${isDownloading && html`
-                                <div class="progress-container" title="${activeDownload.status}">
-                                    <div class="progress-bar" style="width: ${activeDownload.progress}%"></div>
-                                    <div class="progress-text">${Math.round(activeDownload.progress)}%</div>
+                            <div class="torrent-info">
+                                <img
+                                    class="provider-icon"
+                                    src=${PROVIDER_ICONS[t.Provider] || ''}
+                                    alt=${t.Provider || ''}
+                                    title=${t.Provider || ''}
+                                />
+                                <a
+                                    href="javascript:void(0)"
+                                    onClick=${(e) => handleAction(e, t)}
+                                    class="torrent-title"
+                                    style="${isScheduling ? 'opacity: 0.5; cursor: wait;' : ''}"
+                                    title="Click to schedule download, Ctrl+Click to download file"
+                                >
+                                    ${t.Title}
+                                </a>
+                                <div class="torrent-meta">
+                                    <span class="meta-item date" title="Upload Date">
+                                        <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
+                                        ${t.Date}
+                                    </span>
+                                    <span class="meta-item seeders" title="Seeders">
+                                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14V9.41l-2.29 2.29-1.42-1.42L12 5.58l4.71 4.71-1.42 1.42L13 9.41V16h-2z"/></svg>
+                                        ${t.Seeders}
+                                    </span>
+                                    <span class="meta-item leechers" title="Leechers">
+                                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 8v6.59l2.29-2.29 1.42 1.42L12 18.42l-4.71-4.71 1.42-1.42L11 16.59V10h2z"/></svg>
+                                        ${t.Leechers}
+                                    </span>
                                 </div>
-                            `}
-                            ${isScheduling && !isDownloading && html`
-                                <div class="progress-container" title="Scheduling...">
-                                    <div class="progress-bar shim" style="width: 100%"></div>
-                                    <div class="progress-text">...</div>
+                            </div>
+                            ${(isDownloading || isScheduling) && html`
+                                <div class="progress-container" title="${isScheduling ? 'Scheduling...' : activeDownload.status}">
+                                    <div class="progress-bar ${isScheduling ? 'shim' : ''}" style="width: ${isScheduling ? '100%' : activeDownload.progress}%"></div>
+                                    <div class="progress-text">${isScheduling ? '...' : Math.round(activeDownload.progress) + '%'}</div>
                                 </div>
                             `}
                         </div>`;
@@ -178,45 +189,106 @@
 
     .torrent-list {
         width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 5px 0;
     }
 
     .torrent-item {
         display: flex;
         align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 6px 8px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.02);
+        transition: background 0.2s;
+    }
+
+    .torrent-item:hover {
+        background: rgba(255, 255, 255, 0.06);
+    }
+
+    .torrent-info {
+        display: flex;
+        align-items: center;
         gap: 8px;
+        flex-grow: 1;
+        min-width: 0;
     }
 
     .provider-icon {
-        width: 16px;
-        height: 16px;
+        width: 14px;
+        height: 14px;
         flex-shrink: 0;
     }
 
-    .torrent-item a {
-        color: #fff;
+    .torrent-title {
+        color: #e3e3e3;
         text-decoration: none;
-        font-size: 14px;
+        font-size: 13px;
+        font-weight: 400;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         flex-grow: 1;
     }
 
-    .torrent-item a:hover {
+    .torrent-title:hover {
+        color: #fff;
         text-decoration: underline;
     }
 
-    .progress-container {
-        width: 80px;
-        background-color: #333;
-        border-radius: 4px;
-        height: 14px;
-        position: relative;
-        overflow: hidden;
+    .torrent-meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
         flex-shrink: 0;
         margin-left: 8px;
     }
 
+    .meta-item {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 11px;
+        color: #888;
+    }
+
+    .meta-item svg {
+        width: 11px;
+        height: 11px;
+        fill: currentColor;
+    }
+
+    .meta-item.seeders {
+        color: #2ecc71;
+        min-width: 35px;
+    }
+
+    .meta-item.leechers {
+        color: #e74c3c;
+        min-width: 35px;
+    }
+
+    .meta-item.date {
+        color: #666;
+    }
+
+    .progress-container {
+        width: 60px;
+        background-color: #222;
+        border-radius: 8px;
+        height: 10px;
+        position: relative;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+
     .progress-bar {
         height: 100%;
-        background-color: #2ecc71;
+        background: linear-gradient(90deg, #2ecc71, #27ae60);
         transition: width 0.3s ease;
     }
 
@@ -237,8 +309,8 @@
         text-align: center;
         top: 0;
         left: 0;
-        line-height: 14px;
-        font-size: 10px;
+        line-height: 10px;
+        font-size: 8px;
         color: #fff;
         font-weight: bold;
     }
