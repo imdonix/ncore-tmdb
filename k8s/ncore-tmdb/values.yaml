@@ -8,20 +8,14 @@ tmdb:
   service:
     type: ClusterIP
     port: 8080
-  ingress:
-    enabled: true
-    className: traefik
-    annotations: {}
-    hosts:
-      - host: tmdb.local
-        paths:
-          - path: /
-            pathType: ImplementationSpecific
-    tls: []
   env:
     ncoreHost: "http://ncore:8080"
     qbitHost: "http://qbittorrent:8080"
     existingSecret: "ncore-tmdb-secrets"
+  ingress:
+    enabled: true
+    className: traefik
+    host: "tmdb.local"
 
 ncore:
   enabled: true

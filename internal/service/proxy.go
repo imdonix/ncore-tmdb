@@ -20,6 +20,11 @@ import (
 var tmdbURL *url.URL
 var widgetContent string
 
+var (
+	movieRe = regexp.MustCompile(`/movie/(\d+)(?:-|/|$)`)
+	tvRe    = regexp.MustCompile(`/tv/(\d+)(?:-|/|$)`)
+)
+
 func InitProxy() {
 	var err error
 	tmdbURL, err = url.Parse("https://www.themoviedb.org")
@@ -122,13 +127,11 @@ func modifyContent(body []byte, tmdbID string, contentType string) []byte {
 }
 
 func extractTMDBIDFromPath(path string) (string, string) {
-	movieRe := regexp.MustCompile(`/movie/(\d+)-`)
 	movieMatches := movieRe.FindStringSubmatch(path)
 	if len(movieMatches) > 1 {
 		return movieMatches[1], "movie"
 	}
 
-	tvRe := regexp.MustCompile(`/tv/(\d+)-`)
 	tvMatches := tvRe.FindStringSubmatch(path)
 	if len(tvMatches) > 1 {
 		return tvMatches[1], "tv"
