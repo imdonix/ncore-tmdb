@@ -7,6 +7,7 @@ import (
 	"ncore-tmdb/internal/database"
 	"ncore-tmdb/internal/service"
 
+	"github.com/gin-contrib/secure"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -37,7 +38,12 @@ func main() {
 	service.InitQbit()
 
 	r := gin.Default()
-	r.SetTrustedProxies(nil)
+
+	secureMiddleware := secure.New(secure.Config{
+        AllowedHosts: []string{},
+    })
+
+	r.Use(secureMiddleware)
 
 	r.Static("/widget", "./widget")
 
