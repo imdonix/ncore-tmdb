@@ -3,9 +3,9 @@ package main
 import (
 	"log"
 
-	"media-manager/internal/api"
-	"media-manager/internal/database"
-	"media-manager/internal/service"
+	"ncore-tmdb/internal/api"
+	"ncore-tmdb/internal/database"
+	"ncore-tmdb/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -14,7 +14,7 @@ import (
 func main() {
 	_ = godotenv.Load()
 
-	if err := database.Init("media-manager.db"); err != nil {
+	if err := database.Init("data/ncore-tmdb.db"); err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
 	defer database.Close()
@@ -44,6 +44,6 @@ func main() {
 
 	service.SetupProxy(r)
 
-	log.Println("Server starting on :8080")
+	log.Println("🎬 Server is running on http://localhost:8080")
 	r.Run(":8080")
 }

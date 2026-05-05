@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"media-manager/internal/database"
-	"media-manager/internal/service"
+	"ncore-tmdb/internal/database"
+	"ncore-tmdb/internal/service"
 )
 
 func qbitDownload(c *gin.Context) {

@@ -8,7 +8,6 @@ type Torrent struct {
 	Date        string `json:"Date"`
 	Seeders     int    `json:"Seeders"`
 	Leechers    int    `json:"Leechers"`
-	Completed   int    `json:"Completed"`
 	DownloadURL string `json:"Download"`
 	Provider    string `json:"Provider"`
 	TMDBID      int    `json:"-"`
@@ -25,7 +24,6 @@ func CreateTorrentTable() error {
 		date TEXT,
 		seeders INTEGER,
 		leechers INTEGER,
-		completed INTEGER,
 		download_url TEXT,
 		provider TEXT,
 		tmdb_id INTEGER NOT NULL,
@@ -37,13 +35,13 @@ func CreateTorrentTable() error {
 }
 
 func InsertTorrent(t *Torrent) error {
-	_, err := DB.Exec("INSERT OR REPLACE INTO torrent (id, title, key, type, date, seeders, leechers, completed, download_url, provider, tmdb_id, content_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		t.ID, t.Title, t.Key, t.Type, t.Date, t.Seeders, t.Leechers, t.Completed, t.DownloadURL, t.Provider, t.TMDBID, t.ContentType)
+	_, err := DB.Exec("INSERT OR REPLACE INTO torrent (id, title, key, type, date, seeders, leechers, download_url, provider, tmdb_id, content_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		t.ID, t.Title, t.Key, t.Type, t.Date, t.Seeders, t.Leechers, t.DownloadURL, t.Provider, t.TMDBID, t.ContentType)
 	return err
 }
 
 func GetTorrentsByContent(tmdbID int, contentType string) ([]Torrent, error) {
-	rows, err := DB.Query("SELECT id, title, key, type, date, seeders, leechers, completed, download_url, provider, tmdb_id, content_type FROM torrent WHERE tmdb_id = ? AND content_type = ?", tmdbID, contentType)
+	rows, err := DB.Query("SELECT id, title, key, type, date, seeders, leechers, download_url, provider, tmdb_id, content_type FROM torrent WHERE tmdb_id = ? AND content_type = ?", tmdbID, contentType)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +50,7 @@ func GetTorrentsByContent(tmdbID int, contentType string) ([]Torrent, error) {
 	var list = make([]Torrent, 0)
 	for rows.Next() {
 		var t Torrent
-		if err := rows.Scan(&t.ID, &t.Title, &t.Key, &t.Type, &t.Date, &t.Seeders, &t.Leechers, &t.Completed, &t.DownloadURL, &t.Provider, &t.TMDBID, &t.ContentType); err != nil {
+		if err := rows.Scan(&t.ID, &t.Title, &t.Key, &t.Type, &t.Date, &t.Seeders, &t.Leechers, &t.DownloadURL, &t.Provider, &t.TMDBID, &t.ContentType); err != nil {
 			return nil, err
 		}
 		list = append(list, t)
@@ -61,9 +59,9 @@ func GetTorrentsByContent(tmdbID int, contentType string) ([]Torrent, error) {
 }
 
 func GetTorrent(id string) (*Torrent, error) {
-	row := DB.QueryRow("SELECT id, title, key, type, date, seeders, leechers, completed, download_url, provider, tmdb_id, content_type FROM torrent WHERE id = ?", id)
+	row := DB.QueryRow("SELECT id, title, key, type, date, seeders, leechers, download_url, provider, tmdb_id, content_type FROM torrent WHERE id = ?", id)
 	t := &Torrent{}
-	err := row.Scan(&t.ID, &t.Title, &t.Key, &t.Type, &t.Date, &t.Seeders, &t.Leechers, &t.Completed, &t.DownloadURL, &t.Provider, &t.TMDBID, &t.ContentType)
+	err := row.Scan(&t.ID, &t.Title, &t.Key, &t.Type, &t.Date, &t.Seeders, &t.Leechers, &t.DownloadURL, &t.Provider, &t.TMDBID, &t.ContentType)
 	if err != nil {
 		return nil, err
 	}
