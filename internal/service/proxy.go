@@ -45,6 +45,8 @@ func SetupProxy(r *gin.Engine) {
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
 		req.Host = tmdbURL.Host
+		req.Header.Set("Host", tmdbURL.Host)
+    	req.Header.Set("X-Forwarded-Host", req.Host)
 	}
 
 	proxy.ModifyResponse = modifyResponse

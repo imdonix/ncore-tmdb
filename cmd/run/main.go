@@ -39,15 +39,16 @@ func main() {
 
 	r := gin.Default()
 
+	service.SetupProxy(r)
+
 	r.Use(secure.New(secure.Config{
+		AllowedHosts:     []string{"localhost", "tmdb.local"},
 		IsDevelopment: true,
 	}))
 
 	r.Static("/widget", "./widget")
 
 	api.RegisterRoutes(r)
-
-	service.SetupProxy(r)
 
 	log.Println("🎬 Server is running on http://localhost:8080")
 	r.Run(":8080")
