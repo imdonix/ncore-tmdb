@@ -27,9 +27,21 @@ services:
       - app-network
     restart: unless-stopped
 
-  media-manager:
+  ncore-tmdb:
     build: .
-    container_name: media-manager
+    container_name: ncore-tmdb
+    environment:
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - NCORE_HOST=http://ncore:8080
+      - NCORE_USER=${NCORE_USER}
+      - NCORE_PASS=${NCORE_PASS}
+      - QBIT_HOST=http://qbit:1002
+      - QBIT_USER=admin
+      - QBIT_PASS=adminadmin
+    volumes:
+      - ./tmp/ncore-tmdb:/app/data
+    ports:
+      - "8080:8080"
     networks:
       - app-network
     depends_on:

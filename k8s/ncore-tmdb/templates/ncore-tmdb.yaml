@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ncore-tmdb.fullname" . }}
+  labels:
+    {{- include "ncore-tmdb.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "ncore-tmdb.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ncore-tmdb.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: ncore-tmdb
+          image: "{{ .Values.tmdb.image.repository }}:{{ .Values.tmdb.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.tmdb.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: NCORE_HOST
+              value: {{ .Values.tmdb.env.ncoreHost | quote }}
+            - name: NCORE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tmdb.env.existingSecret }}
+                  key: NCORE_USER
+            - name: NCORE_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tmdb.env.existingSecret }}
+                  key: NCORE_PASS
+            - name: QBIT_HOST
+              value: {{ .Values.tmdb.env.qbitHost | quote }}
+            - name: QBIT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tmdb.env.existingSecret }}
+                  key: QBIT_USER
+            - name: QBIT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tmdb.env.existingSecret }}
+                  key: QBIT_PASS
+            - name: TMDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tmdb.env.existingSecret }}
+                  key: TMDB_API_KEY
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ncore-tmdb.fullname" . }}
+  labels:
+    {{- include "ncore-tmdb.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.tmdb.service.type }}
+  ports:
+    - port: {{ .Values.tmdb.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "ncore-tmdb.selectorLabels" . | nindent 4 }}

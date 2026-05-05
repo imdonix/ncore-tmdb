@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"media-manager/internal/database"
+	"ncore-tmdb/internal/database"
 )
 
 var (
@@ -21,13 +21,12 @@ var (
 type Torrent struct {
 	ID          string      `json:"ID"`
 	Title       string      `json:"Title"`
-	Key         string      `json:"Key"`         // added - present in API response 
+	Key         string      `json:"Key"`
 	Type        string      `json:"Type"`
 	Date        string      `json:"Date"`
 	Seeders     int         `json:"Seeders"`
 	Leechers    int         `json:"Leechers"`
-	Completed   int         `json:"Completed"`   // kept but with correct tag (may be absent)
-	DownloadURL string      `json:"Download"`    // changed - API uses "Download", not "download_url"
+	DownloadURL string      `json:"Download"`
 }
 
 type SearchRequest struct {
