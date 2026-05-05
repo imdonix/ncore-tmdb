@@ -26,8 +26,8 @@ func InitQbit() {
 	qbitUser = os.Getenv("QBIT_USER")
 	qbitPass = os.Getenv("QBIT_PASS")
 
-	if qbitHost == "" || qbitUser == "" || qbitPass == "" {
-		panic("QBIT_HOST, QBIT_USER, and QBIT_PASS must be set")
+	if qbitHost == "" {
+		panic("QBIT_HOST must be set")
 	}
 
 	jar, _ := cookiejar.New(nil)
@@ -40,8 +40,14 @@ func InitQbit() {
 func qbitLogin() error {
 	loginURL := fmt.Sprintf("%s/api/v2/auth/login", qbitHost)
 	data := url.Values{}
-	data.Set("username", qbitUser)
-	data.Set("password", qbitPass)
+
+	if qbitUser != "" {
+		data.Set("username", qbitUser)
+	}
+
+	if qbitPass != "" {
+		data.Set("password", qbitPass)
+	}
 
 	resp, err := qbitClient.PostForm(loginURL, data)
 	if err != nil {
