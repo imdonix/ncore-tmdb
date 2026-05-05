@@ -2,12 +2,13 @@ package main
 
 import (
 	"log"
+	"runtime/trace"
 
 	"ncore-tmdb/internal/api"
 	"ncore-tmdb/internal/database"
 	"ncore-tmdb/internal/service"
 
-	"github.com/gin-contrib/secure"
+	"github.com/gin-gonic/contrib/secure"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -39,11 +40,11 @@ func main() {
 
 	r := gin.Default()
 
-	secureMiddleware := secure.New(secure.Config{
-        AllowedHosts: []string{},
+	secureMiddleware := secure.New(secure.Options{
+        IsDevelopment:  true,
     })
 
-	r.Use(secureMiddleware)
+	r.Use(secureMiddleware.Handler())
 
 	r.Static("/widget", "./widget")
 
