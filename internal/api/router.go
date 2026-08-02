@@ -34,5 +34,17 @@ func RegisterRoutes(r *gin.Engine) {
 			qbit.GET("/torrents/ncore/:id", getQbitByNcore)
 			qbit.DELETE("/torrents/:hash", deleteQbitTorrent)
 		}
+
+		// Series follow (auto-download episodes)
+		follows := api.Group("/follows")
+		{
+			follows.GET("", listFollows)
+			follows.POST("", createFollow)
+			follows.POST("/check-all", checkAllFollows)
+			follows.GET("/:tmdbId", getFollow)
+			follows.PATCH("/:tmdbId", updateFollow)
+			follows.DELETE("/:tmdbId", deleteFollow)
+			follows.POST("/:tmdbId/check", checkFollow)
+		}
 	}
 }

@@ -35,11 +35,15 @@ func main() {
 	if err := database.CreateTorrentTable(); err != nil {
 		log.Fatal("Failed to create torrent table:", err)
 	}
+	if err := database.CreateFollowTables(); err != nil {
+		log.Fatal("Failed to create follow tables:", err)
+	}
 
 	service.InitTMDB()
 	service.InitNCore()
 	service.InitProxy()
 	service.InitQbit()
+	service.StartFollowScheduler()
 
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())

@@ -224,8 +224,8 @@ func modifyContent(body []byte, path, tmdbID, pageType string) []byte {
 	// popular-movie lists (body prepend used to dump it into the main column).
 	injectDownloadDashboardBtn(doc, path)
 
-	// Torrent widget on movie detail pages only
-	if tmdbID != "" && pageType == "movie" && widgetSnippet != "" && doc.Find("#ncore-widget-root").Length() == 0 {
+	// Torrent / Follow widget on movie + TV detail pages
+	if tmdbID != "" && (pageType == "movie" || pageType == "tv") && widgetSnippet != "" && doc.Find("#ncore-widget-root").Length() == 0 {
 		w := widgetSnippet
 		w = strings.ReplaceAll(w, "#CONTENT_TMDBID#", tmdbID)
 		w = strings.ReplaceAll(w, "#CONTENT_TYPE#", pageType)

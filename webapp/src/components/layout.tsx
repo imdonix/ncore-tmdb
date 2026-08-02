@@ -1,11 +1,12 @@
 import { Link, useLocation } from "react-router-dom"
-import { Clapperboard, ListVideo, Search, Download } from "lucide-react"
+import { Bell, Clapperboard, ListVideo, Search, Download } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation()
   const isHome = location.pathname === "/"
   const isDownloads = location.pathname.startsWith("/downloads")
+  const isFollows = location.pathname.startsWith("/follows")
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -37,6 +38,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
             >
               <Search className="h-4 w-4" />
               <span className="hidden sm:inline">Search</span>
+            </Link>
+            <Link
+              to="/follows"
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors sm:px-3",
+                isFollows
+                  ? "bg-secondary text-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              )}
+            >
+              <Bell className="h-4 w-4" />
+              <span className="hidden sm:inline">Follows</span>
             </Link>
             <Link
               to="/downloads"
