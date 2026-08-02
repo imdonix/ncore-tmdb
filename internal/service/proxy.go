@@ -26,8 +26,8 @@ var (
 	tvRe    = regexp.MustCompile(`/tv/(\d+)(?:-|/|$)`)
 )
 
-// Header link to the embedded NCore SPA.
-const ncoreHeaderBtn = `<a href="/ncore" id="ncore-header-btn" style="display:inline-flex;align-items:center;margin-left:12px;padding:6px 12px;border-radius:8px;background:#01d277;color:#032541;font:600 13px/1 system-ui,sans-serif;text-decoration:none;white-space:nowrap;vertical-align:middle;z-index:10000;position:relative;">NCore</a>`
+// Header link to the embedded NCore SPA (site chrome only).
+const ncoreHeaderBtn = `<a href="/ncore" id="ncore-header-btn" style="display:inline-flex;align-items:center;margin-left:12px;padding:6px 12px;border-radius:8px;background:#01d277;color:#032541;font:600 13px/1 system-ui,sans-serif;text-decoration:none;white-space:nowrap;vertical-align:middle;z-index:10000;position:relative;">NCore Dashboard</a>`
 
 // Kill TMDB (or any) service workers that hijack same-origin routes like /ncore.
 const swKillScript = `<script id="ncore-sw-kill">
@@ -172,8 +172,12 @@ func modifyResponse(resp *http.Response) error {
 	}
 	_ = resp.Body.Close()
 
-	tmdbID, pageType := extractTMDBIDFromPath(resp.Request.URL.Path)
-	modifiedBody := modifyContent(body, tmdbID, pageType)
+	path := ""
+	if resp.Request != nil && resp.Request.URL != nil {
+		path = resp.Request.URL.Path
+	}
+	tmdbID, pageType := extractTMDBIDFromPath(path)
+	modifiedBody := modifyContent(body, path, tmdbID, pageType)
 
 	resp.Body = io.NopCloser(bytes.NewReader(modifiedBody))
 	resp.ContentLength = int64(len(modifiedBody))
@@ -185,7 +189,7 @@ func modifyResponse(resp *http.Response) error {
 	return nil
 }
 
-func modifyContent(body []byte, tmdbID, pageType string) []byte {
+func modifyContent(body []byte, path, tmdbID, pageType string) []byte {
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
 		return body
@@ -193,7 +197,7 @@ func modifyContent(body []byte, tmdbID, pageType string) []byte {
 
 	// Original stripping: drop auth chrome in header, footer, community block
 	doc.Find("div.flex").Each(func(i int, s *goquery.Selection) {
-		if s.ParentsFiltered("header").Length() > 0 {
+		if s.ParentsFiltered("header, #header").Length() > 0 {
 			s.Remove()
 		}
 	})
@@ -216,18 +220,11 @@ func modifyContent(body []byte, tmdbID, pageType string) []byte {
 		doc.Find("head").PrependHtml(swKillScript)
 	}
 
-	// NCore nav button
-	if doc.Find("#ncore-header-btn").Length() == 0 {
-		if nav := doc.Find("header ul.dropdown_menu").First(); nav.Length() > 0 {
-			nav.AppendHtml(`<li style="display:flex;align-items:center;">` + ncoreHeaderBtn + `</li>`)
-		} else if header := doc.Find("header").First(); header.Length() > 0 {
-			header.AppendHtml(ncoreHeaderBtn)
-		} else {
-			doc.Find("body").PrependHtml(ncoreHeaderBtn)
-		}
-	}
+	// Header button only in the real site chrome — never in page content /
+	// popular-movie lists (body prepend used to dump it into the main column).
+	injectDownloadDashboardBtn(doc, path)
 
-	// Torrent widget on movie detail pages
+	// Torrent widget on movie detail pages only
 	if tmdbID != "" && pageType == "movie" && widgetSnippet != "" && doc.Find("#ncore-widget-root").Length() == 0 {
 		w := widgetSnippet
 		w = strings.ReplaceAll(w, "#CONTENT_TMDBID#", tmdbID)
@@ -250,6 +247,81 @@ func modifyContent(body []byte, tmdbID, pageType string) []byte {
 	out = strings.ReplaceAll(out, "serviceWorker.register", "/*sw-disabled*/")
 
 	return []byte(out)
+}
+
+// listingPage is a TMDB browse/list URL (e.g. /movie popular list), not a detail page.
+func listingPage(path string) bool {
+	p := strings.TrimSuffix(path, "/")
+	if p == "" {
+		return false
+	}
+	// Exact browse roots
+	switch p {
+	case "/movie", "/tv", "/person":
+		return true
+	}
+	// /movie/now-playing, /tv/top-rated, etc. — no numeric id
+	if movieRe.MatchString(path) || tvRe.MatchString(path) {
+		return false // detail page with id
+	}
+	if strings.HasPrefix(p, "/movie/") || strings.HasPrefix(p, "/tv/") || strings.HasPrefix(p, "/person/") {
+		return true
+	}
+	return false
+}
+
+func injectDownloadDashboardBtn(doc *goquery.Document, path string) {
+	// Remove any previous misplaced instances first
+	doc.Find("#ncore-header-btn").Each(func(i int, s *goquery.Selection) {
+		// Keep only if already inside primary site header; drop content clones
+		if s.ParentsFiltered("#header").Length() == 0 && s.ParentsFiltered("header").Length() == 0 {
+			s.Remove()
+		} else if s.ParentsFiltered("main, #main, #media_v4, .white_column, .page_wrapper .content").Length() > 0 {
+			// Button nested under content wrappers incorrectly
+			if s.ParentsFiltered("#header").Length() == 0 {
+				s.Remove()
+			}
+		}
+	})
+
+	// Do not inject on browse/list pages (popular movies, etc.)
+	if listingPage(path) {
+		doc.Find("#ncore-header-btn").Remove()
+		return
+	}
+
+	if doc.Find("#header #ncore-header-btn, header #ncore-header-btn").Length() > 0 {
+		return
+	}
+
+	// Primary TMDB chrome only
+	siteHeader := doc.Find("#header").First()
+	if siteHeader.Length() == 0 {
+		// Fallback: top-level <header>, not ones inside article/main
+		doc.Find("header").Each(func(i int, s *goquery.Selection) {
+			if siteHeader.Length() > 0 {
+				return
+			}
+			if s.ParentsFiltered("main, article, #media_v4, .white_column").Length() == 0 {
+				siteHeader = s
+			}
+		})
+	}
+	if siteHeader.Length() == 0 {
+		return
+	}
+
+	nav := siteHeader.Find("ul.dropdown_menu").First()
+	if nav.Length() > 0 {
+		nav.AppendHtml(`<li class="ncore-nav-item" style="display:flex;align-items:center;list-style:none;">` + ncoreHeaderBtn + `</li>`)
+		return
+	}
+	// Sub-nav / media row inside chrome
+	if sub := siteHeader.Find(".sub_media, .nav_wrapper, .content").First(); sub.Length() > 0 {
+		sub.AppendHtml(ncoreHeaderBtn)
+		return
+	}
+	siteHeader.AppendHtml(ncoreHeaderBtn)
 }
 
 func extractTMDBIDFromPath(path string) (string, string) {

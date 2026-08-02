@@ -234,7 +234,7 @@ func fetch(c *gin.Context) {
 				activeDownload = map[string]any{
 					"id":       downloadingID,
 					"progress": qt.Progress * 100,
-					"status":   qt.Status,
+					"status":   qt.State,
 				}
 				break
 			}

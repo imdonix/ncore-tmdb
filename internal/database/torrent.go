@@ -67,3 +67,25 @@ func GetTorrent(id string) (*Torrent, error) {
 	}
 	return t, nil
 }
+
+// FindTorrentIDByName tries to match a qBittorrent name to a stored nCore torrent title.
+func FindTorrentIDByName(name string) string {
+	if name == "" || DB == nil {
+		return ""
+	}
+	// Exact title match first
+	var id string
+	err := DB.QueryRow(`SELECT id FROM torrent WHERE title = ? LIMIT 1`, name).Scan(&id)
+	if err == nil && id != "" {
+		return id
+	}
+	// qBit often strips .torrent and may alter spacing; try contains both ways
+	err = DB.QueryRow(
+		`SELECT id FROM torrent WHERE ? LIKE '%' || title || '%' OR title LIKE '%' || ? || '%' LIMIT 1`,
+		name, name,
+	).Scan(&id)
+	if err == nil {
+		return id
+	}
+	return ""
+}

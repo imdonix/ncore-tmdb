@@ -21,6 +21,8 @@ var (
 	qbitClient *http.Client
 )
 
+const ncoreTagPrefix = "ncore:"
+
 func InitQbit() {
 	qbitHost = strings.TrimRight(os.Getenv("QBIT_HOST"), "/")
 	qbitUser = os.Getenv("QBIT_USER")
@@ -37,8 +39,6 @@ func InitQbit() {
 	}
 }
 
-// qbitOK treats 2xx (including 204 No Content) as success.
-// Newer qBittorrent builds return 204 on login instead of 200 "Ok.".
 func qbitOK(code int) bool {
 	return code >= 200 && code < 300
 }
@@ -59,7 +59,6 @@ func qbitLogin() error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	// Recent qBittorrent versions require a Referer for CSRF checks
 	req.Header.Set("Referer", qbitHost)
 
 	resp, err := qbitClient.Do(req)
@@ -81,7 +80,24 @@ func qbitLogin() error {
 	return nil
 }
 
-func AddTorrent(torrentData []byte, filename string) error {
+// NcoreTag builds the qBittorrent tag used to link back to an nCore torrent id.
+func NcoreTag(ncoreID string) string {
+	return ncoreTagPrefix + ncoreID
+}
+
+// ParseNcoreIDFromTags extracts ncore id from comma-separated qBittorrent tags.
+func ParseNcoreIDFromTags(tags string) string {
+	for _, part := range strings.Split(tags, ",") {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, ncoreTagPrefix) {
+			return strings.TrimPrefix(part, ncoreTagPrefix)
+		}
+	}
+	return ""
+}
+
+// AddTorrent uploads a .torrent file. Optional ncoreID is stored as tag ncore:{id}.
+func AddTorrent(torrentData []byte, filename string, ncoreID string) error {
 	if err := qbitLogin(); err != nil {
 		return fmt.Errorf("failed to login to qbit: %w", err)
 	}
@@ -98,6 +114,11 @@ func AddTorrent(torrentData []byte, filename string) error {
 	if _, err := io.Copy(part, bytes.NewReader(torrentData)); err != nil {
 		return err
 	}
+
+	if ncoreID != "" {
+		_ = writer.WriteField("tags", NcoreTag(ncoreID))
+	}
+
 	if err := writer.Close(); err != nil {
 		return err
 	}
@@ -123,11 +144,29 @@ func AddTorrent(torrentData []byte, filename string) error {
 	return nil
 }
 
+// QbitTorrent is a subset of qBittorrent's torrents/info payload + ncore link.
 type QbitTorrent struct {
-	Hash     string  `json:"hash"`
-	Name     string  `json:"name"`
-	Progress float64 `json:"progress"`
-	Status   string  `json:"state"`
+	Hash         string  `json:"hash"`
+	Name         string  `json:"name"`
+	Progress     float64 `json:"progress"` // 0..1
+	State        string  `json:"state"`
+	Size         int64   `json:"size"`
+	Downloaded   int64   `json:"downloaded"`
+	Uploaded     int64   `json:"uploaded"`
+	Dlspeed      int64   `json:"dlspeed"`
+	Upspeed      int64   `json:"upspeed"`
+	Eta          int64   `json:"eta"`
+	Ratio        float64 `json:"ratio"`
+	Tags         string  `json:"tags"`
+	Category     string  `json:"category"`
+	SavePath     string  `json:"save_path"`
+	AddedOn      int64   `json:"added_on"`
+	CompletionOn int64   `json:"completion_on"`
+	NumSeeds     int     `json:"num_seeds"`
+	NumLeechs    int     `json:"num_leechs"`
+
+	// Enriched by our API (not from qbit raw JSON alone)
+	NcoreID string `json:"ncoreId,omitempty"`
 }
 
 func GetTorrentsStatus() ([]QbitTorrent, error) {
@@ -157,5 +196,80 @@ func GetTorrentsStatus() ([]QbitTorrent, error) {
 		return nil, err
 	}
 
+	for i := range torrents {
+		torrents[i].NcoreID = ParseNcoreIDFromTags(torrents[i].Tags)
+	}
+
 	return torrents, nil
+}
+
+// GetTorrentByNcoreID finds a qBittorrent entry tagged with ncore:{id}.
+func GetTorrentByNcoreID(ncoreID string) (*QbitTorrent, error) {
+	list, err := GetTorrentsStatus()
+	if err != nil {
+		return nil, err
+	}
+	tag := NcoreTag(ncoreID)
+	for i := range list {
+		if list[i].NcoreID == ncoreID || strings.Contains(list[i].Tags, tag) {
+			t := list[i]
+			return &t, nil
+		}
+	}
+	// Fallback: match name containing the id (legacy adds without tags)
+	for i := range list {
+		if strings.Contains(list[i].Name, ncoreID) {
+			t := list[i]
+			t.NcoreID = ncoreID
+			return &t, nil
+		}
+	}
+	return nil, nil
+}
+
+// EnrichNcoreIDFromName is used by API layer when tags are missing.
+func EnrichNcoreID(t *QbitTorrent, ncoreID string) {
+	if t != nil && t.NcoreID == "" && ncoreID != "" {
+		t.NcoreID = ncoreID
+	}
+}
+
+// DeleteTorrent removes a torrent from qBittorrent. When deleteFiles is true,
+// downloaded content on disk is removed as well.
+func DeleteTorrent(hash string, deleteFiles bool) error {
+	if hash == "" {
+		return fmt.Errorf("missing torrent hash")
+	}
+	if err := qbitLogin(); err != nil {
+		return fmt.Errorf("failed to login to qbit: %w", err)
+	}
+
+	delURL := fmt.Sprintf("%s/api/v2/torrents/delete", qbitHost)
+	data := url.Values{}
+	data.Set("hashes", hash)
+	if deleteFiles {
+		data.Set("deleteFiles", "true")
+	} else {
+		data.Set("deleteFiles", "false")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, delURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", qbitHost)
+
+	resp, err := qbitClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if !qbitOK(resp.StatusCode) {
+		return fmt.Errorf("failed to delete torrent: %s - %s", resp.Status, string(respBody))
+	}
+
+	return nil
 }

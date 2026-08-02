@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useCallback, useEffect, useState } from "react"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import {
   ArrowDown,
   ArrowLeft,
@@ -10,15 +10,23 @@ import {
   ExternalLink,
   HardDrive,
   Loader2,
+  Trash2,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
+  deleteQbitTorrent,
   downloadTorrentUrl,
+  formatBytes,
+  formatEta,
+  formatSpeed,
+  getQbitByNcoreId,
   getTorrent,
+  qbitStateLabel,
   scheduleQbit,
+  type QbitTorrent,
   type Torrent,
 } from "@/lib/api"
 import { formatDate, formatSize, typeLabel } from "@/lib/utils"
@@ -27,17 +35,27 @@ export function TorrentPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [torrent, setTorrent] = useState<Torrent | null>(null)
+  const [qbit, setQbit] = useState<QbitTorrent | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [scheduling, setScheduling] = useState(false)
-  const [scheduled, setScheduled] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+
+  const refreshQbit = useCallback(async () => {
+    if (!id) return
+    try {
+      const t = await getQbitByNcoreId(id)
+      setQbit(t)
+    } catch {
+      // ignore poll errors
+    }
+  }, [id])
 
   useEffect(() => {
     if (!id) return
     setLoading(true)
     setError(null)
-    setScheduled(false)
     setActionError(null)
     getTorrent(id)
       .then(setTorrent)
@@ -45,17 +63,41 @@ export function TorrentPage() {
       .finally(() => setLoading(false))
   }, [id])
 
+  useEffect(() => {
+    void refreshQbit()
+    const timer = window.setInterval(() => void refreshQbit(), 3000)
+    return () => window.clearInterval(timer)
+  }, [refreshQbit])
+
   const onQbit = async () => {
     if (!torrent) return
     setScheduling(true)
     setActionError(null)
     try {
       await scheduleQbit(torrent.ID, torrent.Title)
-      setScheduled(true)
+      await refreshQbit()
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to schedule")
     } finally {
       setScheduling(false)
+    }
+  }
+
+  const onDelete = async () => {
+    if (!qbit) return
+    const ok = window.confirm(
+      `Delete "${qbit.name}" from qBittorrent and remove files on disk?`
+    )
+    if (!ok) return
+    setDeleting(true)
+    setActionError(null)
+    try {
+      await deleteQbitTorrent(qbit.hash, true)
+      setQbit(null)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Delete failed")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -88,12 +130,77 @@ export function TorrentPage() {
     )
   }
 
+  const inQbit = !!qbit
+  const pct = qbit ? Math.min(100, Math.max(0, qbit.progress * 100)) : 0
+  const done = pct >= 99.9
+
   return (
     <div className="space-y-5">
       <Button variant="ghost" size="sm" className="-ml-2" onClick={goBack}>
         <ArrowLeft className="h-4 w-4" />
         Back
       </Button>
+
+      {qbit && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader className="space-y-2 pb-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={done ? "success" : "default"}>
+                {qbitStateLabel(qbit.state)}
+              </Badge>
+              <span className="text-xs text-muted-foreground">qBittorrent</span>
+            </div>
+            <CardTitle className="text-base sm:text-lg">
+              {done ? "Downloaded" : "Download in progress"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{pct.toFixed(1)}%</span>
+                <span>
+                  {formatBytes(qbit.downloaded || (pct / 100) * qbit.size)} /{" "}
+                  {formatBytes(qbit.size)}
+                </span>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    done ? "bg-emerald-500" : "bg-primary"
+                  }`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <span>↓ {formatSpeed(qbit.dlspeed)}</span>
+              <span>↑ {formatSpeed(qbit.upspeed)}</span>
+              <span>ETA {formatEta(qbit.eta)}</span>
+              <span>Ratio {(qbit.ratio ?? 0).toFixed(2)}</span>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button asChild variant="secondary" className="h-10 flex-1">
+                <Link to="/downloads">View all downloads</Link>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-10 flex-1 text-red-400 hover:text-red-300"
+                onClick={onDelete}
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Delete + files
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="space-y-3">
@@ -137,27 +244,20 @@ export function TorrentPage() {
             </div>
           )}
 
-          {scheduled && (
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
-              <Check className="h-4 w-4" />
-              Scheduled in qBittorrent
-            </div>
-          )}
-
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               className="h-11 flex-1"
               onClick={onQbit}
-              disabled={scheduling || scheduled}
+              disabled={scheduling || inQbit}
             >
               {scheduling ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
-              ) : scheduled ? (
+              ) : inQbit ? (
                 <Check className="h-4 w-4" />
               ) : (
                 <Download className="h-4 w-4" />
               )}
-              {scheduled ? "Added to qBit" : "Send to qBittorrent"}
+              {inQbit ? "In qBittorrent" : "Send to qBittorrent"}
             </Button>
             <Button variant="outline" className="h-11 flex-1" asChild>
               <a href={downloadTorrentUrl(torrent.ID, torrent.Title)} download>

@@ -37,7 +37,7 @@ func qbitDownload(c *gin.Context) {
 		filename = id
 	}
 
-	err = service.AddTorrent(data, fmt.Sprintf("%s.torrent", filename))
+	err = service.AddTorrent(data, fmt.Sprintf("%s.torrent", filename), id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to add torrent to qbittorrent: %v", err)})
 		return

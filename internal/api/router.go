@@ -26,5 +26,13 @@ func RegisterRoutes(r *gin.Engine) {
 		api.GET("/tv/:tmdbID", fetch)
 		api.GET("/download/:id", download)
 		api.GET("/qbit/download/:id", qbitDownload)
+
+		// qBittorrent management for the NCore SPA
+		qbit := api.Group("/qbit")
+		{
+			qbit.GET("/torrents", listQbitTorrents)
+			qbit.GET("/torrents/ncore/:id", getQbitByNcore)
+			qbit.DELETE("/torrents/:hash", deleteQbitTorrent)
+		}
 	}
 }
