@@ -5,3 +5,14 @@ air/
 *.out
 *.db
 .env
+node_modules/
+**/node_modules/
+webapp/dist/
+widget/dist/
+package-lock.json
+**/package-lock.json
+*.log
+
+# Built frontends (embedded into the binary by `make`)
+internal/static/webapp/
+internal/static/widget/

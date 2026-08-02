@@ -9,21 +9,65 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gin-gonic/gin"
+
+	"ncore-tmdb/internal/static"
 )
 
 var tmdbURL *url.URL
-var widgetContent string
+var widgetSnippet string
 
 var (
 	movieRe = regexp.MustCompile(`/movie/(\d+)(?:-|/|$)`)
 	tvRe    = regexp.MustCompile(`/tv/(\d+)(?:-|/|$)`)
 )
+
+// Header link to the embedded NCore SPA.
+const ncoreHeaderBtn = `<a href="/ncore" id="ncore-header-btn" style="display:inline-flex;align-items:center;margin-left:12px;padding:6px 12px;border-radius:8px;background:#01d277;color:#032541;font:600 13px/1 system-ui,sans-serif;text-decoration:none;white-space:nowrap;vertical-align:middle;z-index:10000;position:relative;">NCore</a>`
+
+// Kill TMDB (or any) service workers that hijack same-origin routes like /ncore.
+const swKillScript = `<script id="ncore-sw-kill">
+(function () {
+  try {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        regs.forEach(function (r) { r.unregister(); });
+      });
+    }
+    if (window.caches && caches.keys) {
+      caches.keys().then(function (keys) {
+        keys.forEach(function (k) { caches.delete(k); });
+      });
+    }
+  } catch (e) {}
+})();
+</script>`
+
+// Service worker that immediately unregisters itself (replaces TMDB's /sw.js).
+const killSwitchSW = `/* ncore-tmdb: neutralize site service workers */
+self.addEventListener('install', function (e) { self.skipWaiting(); });
+self.addEventListener('activate', function (e) {
+  e.waitUntil((async function () {
+    try {
+      var keys = await caches.keys();
+      await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+    } catch (err) {}
+    try { await self.registration.unregister(); } catch (err) {}
+    try {
+      var clients = await self.clients.matchAll({ type: 'window' });
+      clients.forEach(function (c) { c.navigate(c.url); });
+    } catch (err) {}
+  })());
+});
+self.addEventListener('fetch', function (e) {
+  // Never intercept — pass through to network
+  return;
+});
+`
 
 func InitProxy() {
 	var err error
@@ -32,36 +76,70 @@ func InitProxy() {
 		log.Fatal(err)
 	}
 
-	content, err := os.ReadFile("widget/widget.html")
+	content, err := static.WidgetSnippet()
 	if err != nil {
-		panic(fmt.Sprintf("failed to load widget: %v", err))
+		log.Printf("Warning: widget snippet not found (run make): %v", err)
+		widgetSnippet = ""
+		return
 	}
-	widgetContent = string(content)
+	widgetSnippet = string(content)
 }
 
+// SetupProxy reverse-proxies unmatched routes to TMDB.
 func SetupProxy(r *gin.Engine) {
+	// Own /sw.js so TMDB's service worker cannot control this origin
+	r.GET("/sw.js", serveKillSwitchSW)
+	r.GET("/service-worker.js", serveKillSwitchSW)
+	r.GET("/serviceworker.js", serveKillSwitchSW)
+
 	proxy := httputil.NewSingleHostReverseProxy(tmdbURL)
 	originalDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
 		req.Host = tmdbURL.Host
 		req.Header.Set("Host", tmdbURL.Host)
-    	req.Header.Set("X-Forwarded-Host", req.Host)
+		req.Header.Set("X-Forwarded-Host", req.Host)
+		// Prefer gzip so HTML injection can decode reliably
+		req.Header.Set("Accept-Encoding", "gzip")
 	}
 
 	proxy.ModifyResponse = modifyResponse
+	proxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
+		log.Printf("TMDB proxy error %s: %v", req.URL.RequestURI(), err)
+		http.Error(w, "upstream error", http.StatusBadGateway)
+	}
 
 	r.NoRoute(func(c *gin.Context) {
 		proxyPath := c.Request.URL.Path
 		if proxyPath == "" {
 			proxyPath = "/"
 		}
-
 		c.Request.URL.Path = proxyPath
 		c.Request.Host = tmdbURL.Host
-
 		proxy.ServeHTTP(c.Writer, c.Request)
 	})
+}
+
+func serveKillSwitchSW(c *gin.Context) {
+	c.Header("Content-Type", "application/javascript; charset=utf-8")
+	c.Header("Service-Worker-Allowed", "/")
+	c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
+	c.String(http.StatusOK, killSwitchSW)
+}
+
+// ServeSPA writes the embedded NCore SPA index.html (with SW kill script).
+func ServeSPA(c *gin.Context) {
+	index, err := static.WebappIndex()
+	if err != nil {
+		c.String(http.StatusServiceUnavailable, "Webapp not built. Run: make")
+		return
+	}
+	html := string(index)
+	if !strings.Contains(html, "ncore-sw-kill") {
+		html = strings.Replace(html, "<head>", "<head>"+swKillScript, 1)
+	}
+	c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
 }
 
 func modifyResponse(resp *http.Response) error {
@@ -69,10 +147,14 @@ func modifyResponse(resp *http.Response) error {
 	if !strings.Contains(contentType, "text/html") {
 		return nil
 	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil
+	}
 
 	var reader io.Reader = resp.Body
+	enc := resp.Header.Get("Content-Encoding")
 
-	if strings.Contains(resp.Header.Get("Content-Encoding"), "gzip") {
+	if strings.Contains(enc, "gzip") {
 		gzReader, err := gzip.NewReader(resp.Body)
 		if err != nil {
 			return err
@@ -80,44 +162,80 @@ func modifyResponse(resp *http.Response) error {
 		defer gzReader.Close()
 		reader = gzReader
 		resp.Header.Del("Content-Encoding")
+	} else if enc != "" && enc != "identity" {
+		return nil
 	}
 
 	body, err := io.ReadAll(reader)
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
-	tmdbID, contentType := extractTMDBIDFromPath(resp.Request.URL.Path)
-	modifiedBody := modifyContent(body, tmdbID, contentType)
+	tmdbID, pageType := extractTMDBIDFromPath(resp.Request.URL.Path)
+	modifiedBody := modifyContent(body, tmdbID, pageType)
 
 	resp.Body = io.NopCloser(bytes.NewReader(modifiedBody))
 	resp.ContentLength = int64(len(modifiedBody))
 	resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(modifiedBody)))
+	resp.Header.Del("Content-Encoding")
+	// Discourage caching of rewritten HTML (and SW control)
+	resp.Header.Set("Cache-Control", "no-cache")
 
 	return nil
 }
 
-func modifyContent(body []byte, tmdbID string, contentType string) []byte {
+func modifyContent(body []byte, tmdbID, pageType string) []byte {
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
 		return body
 	}
 
+	// Original stripping: drop auth chrome in header, footer, community block
 	doc.Find("div.flex").Each(func(i int, s *goquery.Selection) {
 		if s.ParentsFiltered("header").Length() > 0 {
 			s.Remove()
 		}
 	})
-
 	doc.Find("footer").Remove()
 	doc.Find("section.inner_content.bg_image.community").Remove()
 
-	if tmdbID != "" && contentType != "" && contentType != "tv" {
-		w := widgetContent
+	// Cookie / consent popups (OneTrust / CookieLaw used by TMDB)
+	stripCookieConsent(doc)
+
+	// Prevent TMDB from re-registering a service worker on this origin
+	doc.Find("script").Each(func(i int, s *goquery.Selection) {
+		txt := s.Text()
+		if strings.Contains(txt, "serviceWorker") && strings.Contains(txt, "register") {
+			s.SetHtml("/* service worker registration disabled by ncore-tmdb */")
+		}
+	})
+
+	// Kill any existing SW on page load
+	if doc.Find("#ncore-sw-kill").Length() == 0 {
+		doc.Find("head").PrependHtml(swKillScript)
+	}
+
+	// NCore nav button
+	if doc.Find("#ncore-header-btn").Length() == 0 {
+		if nav := doc.Find("header ul.dropdown_menu").First(); nav.Length() > 0 {
+			nav.AppendHtml(`<li style="display:flex;align-items:center;">` + ncoreHeaderBtn + `</li>`)
+		} else if header := doc.Find("header").First(); header.Length() > 0 {
+			header.AppendHtml(ncoreHeaderBtn)
+		} else {
+			doc.Find("body").PrependHtml(ncoreHeaderBtn)
+		}
+	}
+
+	// Torrent widget on movie detail pages
+	if tmdbID != "" && pageType == "movie" && widgetSnippet != "" && doc.Find("#ncore-widget-root").Length() == 0 {
+		w := widgetSnippet
 		w = strings.ReplaceAll(w, "#CONTENT_TMDBID#", tmdbID)
-		w = strings.ReplaceAll(w, "#CONTENT_TYPE#", contentType)
-		doc.Find("div#media_v4").Find("div.white_column").PrependHtml(w)
+		w = strings.ReplaceAll(w, "#CONTENT_TYPE#", pageType)
+		col := doc.Find("div#media_v4 div.white_column").First()
+		if col.Length() > 0 {
+			col.PrependHtml(w)
+		}
 	}
 
 	html, err := doc.Html()
@@ -125,19 +243,91 @@ func modifyContent(body []byte, tmdbID string, contentType string) []byte {
 		return body
 	}
 
-	return []byte(html)
+	// Extra safety: neutralize register calls that survived as external bundles won't,
+	// but inline ones we rewrote. Also block common patterns in attributes.
+	out := html
+	out = strings.ReplaceAll(out, "navigator.serviceWorker.register", "Promise.resolve.bind(Promise)/*sw-disabled*/")
+	out = strings.ReplaceAll(out, "serviceWorker.register", "/*sw-disabled*/")
+
+	return []byte(out)
 }
 
 func extractTMDBIDFromPath(path string) (string, string) {
-	movieMatches := movieRe.FindStringSubmatch(path)
-	if len(movieMatches) > 1 {
-		return movieMatches[1], "movie"
+	if m := movieRe.FindStringSubmatch(path); len(m) > 1 {
+		return m[1], "movie"
 	}
-
-	tvMatches := tvRe.FindStringSubmatch(path)
-	if len(tvMatches) > 1 {
-		return tvMatches[1], "tv"
+	if m := tvRe.FindStringSubmatch(path); len(m) > 1 {
+		return m[1], "tv"
 	}
-
 	return "", ""
+}
+
+// stripCookieConsent removes OneTrust/CookieLaw banners and loaders so the
+// "Accept cookies" popup never appears behind the proxy.
+func stripCookieConsent(doc *goquery.Document) {
+	// Banner / modal containers
+	selectors := []string{
+		"#onetrust-banner-sdk",
+		"#onetrust-consent-sdk",
+		"#onetrust-pc-sdk",
+		"#ot-sdk-btn-floating",
+		".onetrust-pc-dark-filter",
+		".ot-sdk-container",
+		"#ot-sdk-btn",
+		"[id*='onetrust']",
+		"[class*='onetrust']",
+		"[id*='cookie-banner']",
+		"[class*='cookie-banner']",
+		"[id*='cookie_banner']",
+		"[class*='cookie_consent']",
+		"[id*='cookie-consent']",
+	}
+	for _, sel := range selectors {
+		doc.Find(sel).Remove()
+	}
+
+	// External consent scripts (cookielaw / onetrust / optanon)
+	doc.Find("script").Each(func(i int, s *goquery.Selection) {
+		src, _ := s.Attr("src")
+		txt := s.Text()
+		blob := strings.ToLower(src + " " + txt)
+		if strings.Contains(blob, "cookielaw") ||
+			strings.Contains(blob, "onetrust") ||
+			strings.Contains(blob, "optanon") ||
+			strings.Contains(blob, "otSDKStub") ||
+			strings.Contains(blob, "ot-sdk") {
+			s.Remove()
+		}
+	})
+
+	// Linked consent stylesheets
+	doc.Find("link[href]").Each(func(i int, s *goquery.Selection) {
+		href, _ := s.Attr("href")
+		h := strings.ToLower(href)
+		if strings.Contains(h, "cookielaw") || strings.Contains(h, "onetrust") {
+			s.Remove()
+		}
+	})
+
+	// Hide anything that still gets injected client-side
+	if doc.Find("#ncore-cookie-hide").Length() == 0 {
+		doc.Find("head").AppendHtml(`<style id="ncore-cookie-hide">
+#onetrust-banner-sdk,
+#onetrust-consent-sdk,
+#onetrust-pc-sdk,
+#ot-sdk-btn-floating,
+.onetrust-pc-dark-filter,
+.ot-sdk-container,
+#ot-sdk-btn,
+[id*="onetrust"],
+[class*="onetrust"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+}
+</style>`)
+	}
 }

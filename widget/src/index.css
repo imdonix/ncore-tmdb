@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+/* Scope widget styles so they don't fight TMDB global CSS too hard */
+#ncore-widget-root {
+  --nw-bg: rgba(15, 23, 42, 0.55);
+  --nw-card: rgba(30, 41, 59, 0.65);
+  --nw-border: rgba(148, 163, 184, 0.18);
+  --nw-text: #e2e8f0;
+  --nw-muted: #94a3b8;
+  --nw-primary: #34d399;
+  --nw-seed: #34d399;
+  --nw-leech: #f87171;
+  color: var(--nw-text);
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+#ncore-widget-root * {
+  box-sizing: border-box;
+}
+
+#ncore-widget-root a {
+  color: inherit;
+  text-decoration: none;
+}

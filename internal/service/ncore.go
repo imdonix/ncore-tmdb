@@ -19,14 +19,17 @@ var (
 )
 
 type Torrent struct {
-	ID          string      `json:"ID"`
-	Title       string      `json:"Title"`
-	Key         string      `json:"Key"`
-	Type        string      `json:"Type"`
-	Date        string      `json:"Date"`
-	Seeders     int         `json:"Seeders"`
-	Leechers    int         `json:"Leechers"`
-	DownloadURL string      `json:"Download"`
+	ID          string `json:"ID"`
+	Title       string `json:"Title"`
+	Key         string `json:"Key"`
+	Size        any    `json:"Size,omitempty"`
+	Type        string `json:"Type"`
+	Date        string `json:"Date"`
+	Seeders     int    `json:"Seeders"`
+	Leechers    int    `json:"Leechers"`
+	DownloadURL string `json:"Download"`
+	URL         string `json:"URL,omitempty"`
+	Extra       any    `json:"Extra,omitempty"`
 }
 
 type SearchRequest struct {
@@ -36,6 +39,18 @@ type SearchRequest struct {
 	SortBy    string `json:"sort_by"`
 	SortOrder string `json:"sort_order"`
 	Page      int    `json:"page"`
+}
+
+type SearchResult struct {
+	Torrents   []Torrent `json:"Torrents"`
+	NumOfPages int       `json:"NumOfPages"`
+}
+
+// SearchTypeOption describes a filter category for the UI.
+type SearchTypeOption struct {
+	Value  string `json:"value"`
+	Label  string `json:"label"`
+	Group  string `json:"group"`
 }
 
 func InitNCore() {
@@ -96,7 +111,7 @@ func verifyToken() bool {
 	if token == "" {
 		return false
 	}
-	url := fmt.Sprintf("%s/torrent/2128123", ncoreHost)
+	url := fmt.Sprintf("%s/verify", ncoreHost)
 	httpReq, _ := http.NewRequest("GET", url, nil)
 	httpReq.Header.Set("X-Ncore-Auth", token)
 
@@ -118,6 +133,14 @@ func ensureValidToken() error {
 }
 
 func SearchNCore(req SearchRequest) ([]Torrent, error) {
+	result, err := SearchNCoreFull(req)
+	if err != nil {
+		return nil, err
+	}
+	return result.Torrents, nil
+}
+
+func SearchNCoreFull(req SearchRequest) (*SearchResult, error) {
 	if err := ensureValidToken(); err != nil {
 		return nil, err
 	}
@@ -140,16 +163,12 @@ func SearchNCore(req SearchRequest) ([]Torrent, error) {
 		return nil, fmt.Errorf("search failed with status: %s", resp.Status)
 	}
 
-	// Read response body for debugging
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	// Decode response - API returns {"Torrents": [...]}
-	var response struct {
-		Torrents []Torrent `json:"Torrents"`
-	}
+	var response SearchResult
 	if err := json.Unmarshal(bodyBytes, &response); err != nil {
 		preview := string(bodyBytes)
 		if len(preview) > 300 {
@@ -158,7 +177,11 @@ func SearchNCore(req SearchRequest) ([]Torrent, error) {
 		return nil, fmt.Errorf("failed to decode response: %s", preview)
 	}
 
-	return response.Torrents, nil
+	if response.Torrents == nil {
+		response.Torrents = []Torrent{}
+	}
+
+	return &response, nil
 }
 
 func GetTorrentDetails(id string) (json.RawMessage, error) {
@@ -224,4 +247,44 @@ func doGet(url string) (json.RawMessage, error) {
 
 func GetTorrentsNCore() string {
 	return fmt.Sprintf("NCore service initialized at %s", ncoreHost)
+}
+
+// SearchTypes returns UI-friendly category options matching ncore-go SearchParamType.
+func SearchTypes() []SearchTypeOption {
+	return []SearchTypeOption{
+		{Value: "all_own", Label: "All", Group: "General"},
+
+		{Value: "hd_hun", Label: "HD (Hun)", Group: "Movies"},
+		{Value: "hd", Label: "HD", Group: "Movies"},
+		{Value: "xvid_hun", Label: "SD (Hun)", Group: "Movies"},
+		{Value: "xvid", Label: "SD", Group: "Movies"},
+		{Value: "dvd_hun", Label: "DVD (Hun)", Group: "Movies"},
+		{Value: "dvd", Label: "DVD", Group: "Movies"},
+		{Value: "dvd9_hun", Label: "DVD9 (Hun)", Group: "Movies"},
+		{Value: "dvd9", Label: "DVD9", Group: "Movies"},
+
+		{Value: "hdser_hun", Label: "HD Series (Hun)", Group: "Series"},
+		{Value: "hdser", Label: "HD Series", Group: "Series"},
+		{Value: "xvidser_hun", Label: "SD Series (Hun)", Group: "Series"},
+		{Value: "xvidser", Label: "SD Series", Group: "Series"},
+		{Value: "dvdser_hun", Label: "DVD Series (Hun)", Group: "Series"},
+		{Value: "dvdser", Label: "DVD Series", Group: "Series"},
+
+		{Value: "mp3_hun", Label: "MP3 (Hun)", Group: "Music"},
+		{Value: "mp3", Label: "MP3", Group: "Music"},
+		{Value: "lossless_hun", Label: "Lossless (Hun)", Group: "Music"},
+		{Value: "lossless", Label: "Lossless", Group: "Music"},
+		{Value: "clip", Label: "Music Video", Group: "Music"},
+
+		{Value: "game_iso", Label: "Game ISO", Group: "Games"},
+		{Value: "game_rip", Label: "Game Rip", Group: "Games"},
+		{Value: "console", Label: "Console", Group: "Games"},
+
+		{Value: "ebook_hun", Label: "eBook (Hun)", Group: "Books"},
+		{Value: "ebook", Label: "eBook", Group: "Books"},
+
+		{Value: "iso", Label: "Program ISO", Group: "Apps"},
+		{Value: "misc", Label: "Program Misc", Group: "Apps"},
+		{Value: "mobil", Label: "Mobile", Group: "Apps"},
+	}
 }

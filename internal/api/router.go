@@ -8,7 +8,22 @@ func RegisterRoutes(r *gin.Engine) {
 	api := r.Group("/api")
 	{
 		api.GET("/health", healthCheck)
-		api.GET("/:type/:tmdbID", fetch)
+
+		// NCore client API (registered before param routes)
+		ncore := api.Group("/ncore")
+		{
+			ncore.POST("/search", ncoreSearch)
+			ncore.GET("/torrent/:id", ncoreTorrent)
+			ncore.GET("/download/:id", ncoreDownload)
+			ncore.POST("/qbit/:id", ncoreQbit)
+			ncore.GET("/recommended", ncoreRecommended)
+			ncore.GET("/activity", ncoreActivity)
+			ncore.GET("/types", ncoreTypes)
+		}
+
+		// TMDB-linked endpoints used by the widget
+		api.GET("/movie/:tmdbID", fetch)
+		api.GET("/tv/:tmdbID", fetch)
 		api.GET("/download/:id", download)
 		api.GET("/qbit/download/:id", qbitDownload)
 	}

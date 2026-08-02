@@ -4,3 +4,10 @@ tmp
 .air.toml
 .env
 *.db
+node_modules
+webapp/node_modules
+widget/node_modules
+air
+.git
+package-lock.json
+**/package-lock.json

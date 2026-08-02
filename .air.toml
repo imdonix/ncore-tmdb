@@ -5,8 +5,8 @@ tmp_dir = "air"
   cmd = "go build -o ./bin/ncore-tmdb ./cmd/run/"
   bin = "bin/ncore-tmdb"
   full_bin = "APP_ENV=dev APP_USER=air ./bin/ncore-tmdb"
-  include_ext = ["go", "tpl", "tmpl", "html", "widget"]
-  exclude_dir = ["assets", "tmp", "vendor", "dashboard", "bin"]
+  include_ext = ["go", "tpl", "tmpl", "html"]
+  exclude_dir = ["assets", "tmp", "vendor", "bin", "webapp/node_modules", "widget/node_modules", "air", "data"]
   delay = 1000
   stop_on_error = true
   kill_delay = "500ms"

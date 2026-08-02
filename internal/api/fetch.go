@@ -16,6 +16,36 @@ import (
 
 var specialCharsRegex = regexp.MustCompile(`[,:;!@#$%^&*()+=\[\]{}|\\/"'<>?~` + "`" + `]+`)
 
+// ncoreSearchParams is the exact query used to fetch torrents for a TMDB item.
+// Shared with the widget so "Open search result" can reopen the same list in /ncore.
+type ncoreSearchParams struct {
+	Pattern   string `json:"pattern"`
+	Type      string `json:"type"`
+	Where     string `json:"where"`
+	SortBy    string `json:"sort_by"`
+	SortOrder string `json:"sort_order"`
+	Page      int    `json:"page"`
+}
+
+func buildNcoreSearchParams(name, releaseDate string) ncoreSearchParams {
+	year := ""
+	if len(releaseDate) >= 4 {
+		year = releaseDate[:4]
+	}
+	pattern := strings.ToLower(fmt.Sprintf("%s %s", name, year))
+	pattern = specialCharsRegex.ReplaceAllString(pattern, "")
+	pattern = strings.Join(strings.Fields(pattern), " ")
+
+	return ncoreSearchParams{
+		Pattern:   pattern,
+		Type:      "all_own",
+		Where:     "name",
+		SortBy:    "seeders",
+		SortOrder: "DESC",
+		Page:      1,
+	}
+}
+
 func fetch(c *gin.Context) {
 	idStr := c.Param("tmdbID")
 	tmdbID, err := strconv.Atoi(idStr)
@@ -24,7 +54,15 @@ func fetch(c *gin.Context) {
 		return
 	}
 
-	contentType := c.Param("type")
+	contentType := ""
+	switch {
+	case strings.HasPrefix(c.Request.URL.Path, "/api/movie/"):
+		contentType = "movie"
+	case strings.HasPrefix(c.Request.URL.Path, "/api/tv/"):
+		contentType = "tv"
+	default:
+		contentType = c.Param("type")
+	}
 	if contentType != "movie" && contentType != "tv" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid type"})
 		return
@@ -56,11 +94,14 @@ func fetch(c *gin.Context) {
 			return
 		}
 
+		search := buildNcoreSearchParams(existingContent.Name, existingContent.ReleaseDate)
+
 		c.JSON(http.StatusOK, gin.H{
 			"tmdbID":   tmdbID,
 			"type":     contentType,
 			"metadata": details,
 			"torrents": torrents,
+			"search":   search,
 			"cached":   true,
 		})
 		return
@@ -122,14 +163,7 @@ func fetch(c *gin.Context) {
 	metadataJSON, _ := json.Marshal(details)
 	database.SetContentKV(tmdbID, contentType, "metadata", string(metadataJSON))
 
-	year := ""
-	if len(releaseDate) >= 4 {
-		year = releaseDate[:4]
-	}
-
-	searchPattern := fmt.Sprintf("%s %s", name, year)
-	searchPattern = strings.ToLower(searchPattern)
-	searchPattern = specialCharsRegex.ReplaceAllString(searchPattern, "")
+	search := buildNcoreSearchParams(name, releaseDate)
 
 	// 2. Fetch from multiple torrent providers and write to DB
 	// Add your new providers to this list as you build them in the service package
@@ -142,15 +176,15 @@ func fetch(c *gin.Context) {
 		switch provider {
 		case "NCORE":
 			fetchedTorrents, searchErr = service.SearchNCore(service.SearchRequest{
-				Pattern:   searchPattern,
-				Type:      "all_own",
-				Where:     "name",
-				SortBy:    "seeders",
-				SortOrder: "desc",
-				Page:      1,
+				Pattern:   search.Pattern,
+				Type:      search.Type,
+				Where:     search.Where,
+				SortBy:    search.SortBy,
+				SortOrder: search.SortOrder,
+				Page:      search.Page,
 			})
 		case "OTHER_PROVIDER":
-			// fetchedTorrents, searchErr = service.SearchOtherProvider(searchPattern)
+			// fetchedTorrents, searchErr = service.SearchOtherProvider(search.Pattern)
 		}
 
 		if searchErr != nil {
@@ -212,6 +246,7 @@ func fetch(c *gin.Context) {
 		"type":           contentType,
 		"metadata":       details,
 		"torrents":       dbTorrents,
+		"search":         search,
 		"activeDownload": activeDownload,
 	})
 }
