@@ -1,128 +1,72 @@
 # ncore-tmdb
 
-A Go service that bridges TMDB (The Movie Database) with NCore torrent tracker and qBittorrent. Includes a **mobile-friendly NCore search client** (React + shadcn) embedded in the binary, plus a TMDB reverse-proxy with an improved torrent widget.
+A self-hosted bridge between [The Movie Database](https://www.themoviedb.org), the nCore tracker, and qBittorrent — so you search, follow series, and grab releases without leaving one polished UI.
 
-## Features
+### Movies — torrents where you browse
 
-- **NCore web client** — search, filter, paginate, and open torrent details
-- **TMDB proxy** — browse movies on a proxied TMDB site; header/nav switches between clients
-- **Torrent widget** on TMDB movie pages — clicking a torrent opens the NCore client (no instant download)
-- **qBittorrent** integration from the torrent detail page
-- Frontend assets **embedded** into the final Go binary (`go:embed`)
-- Docker and Kubernetes/Helm support
+Open any movie on your TMDB proxy. A **Download with Torrent** panel lists nCore releases with seeders, size, and one-click open in the dashboard.
 
-## Prerequisites
+<p align="center">
+  <img src="docs/screenshots/tmdb-movie.png" alt="Fight Club with nCore torrent list" width="900" />
+</p>
 
-- TMDB API key ([get one here](https://www.themoviedb.org/settings/api))
-- Access to NCore tracker (via [ncore-go](https://github.com/imdonix/ncore-go) REST API / `imdonix/ncore` image)
-- qBittorrent instance
-- [Bun](https://bun.sh) (to build frontends)
-- Go 1.25+
+### Series — follow once, grab forever
 
-## Running with Docker Compose
+On a TV show page, pick **720p / 1080p**, skip seasons you already own, and hit **Follow series**. The service checks nCore hourly for `S01E01`-style episodes and full season packs.
 
-1. Create a `.env` file:
-```env
-TMDB_API_KEY=your_tmdb_api_key
-NCORE_USER=your_ncore_username
-NCORE_PASS=your_ncore_password
-```
+<p align="center">
+  <img src="docs/screenshots/tmdb-tv-follow.png" alt="House of the Dragon follow widget" width="900" />
+</p>
 
-2. Start the services:
+### NCore Dashboard — search that feels modern
+
+A dark, fast React app at `/ncore`: filters, categories, seeders, and detail pages that send straight to qBittorrent.
+
+<p align="center">
+  <img src="docs/screenshots/ncore-search.png" alt="NCore torrent search UI" width="900" />
+</p>
+
+### Follows — your series command center
+
+See every show you’re tracking, run a manual check, jump back to TMDB, and inspect what was found or still missing.
+
+<p align="center">
+  <img src="docs/screenshots/ncore-follows.png" alt="Follows dashboard" width="900" />
+</p>
+
+## Highlights
+
+| Feature | What you get |
+|--------|----------------|
+| **TMDB proxy** | Familiar browse experience, enhanced with download tools |
+| **Movie widget** | Instant nCore matches on the page |
+| **Series follow** | Quality choice, skip seasons, hourly scan, season-pack upgrades |
+| **NCore SPA** | Search, torrent detail, follows, qBit queue |
+| **One binary** | Frontends built and embedded — deploy a single Go binary |
+
+## Quick start
+
+**Requirements:** Docker (or Go + Bun), nCore account, TMDB API key, qBittorrent.
+
 ```bash
+# Configure
+cp .env.example .env   # or create .env with your keys
+# TMDB_API_KEY=...
+# NCORE_USER=...
+# NCORE_PASS=...
+# NCORE_HOST=http://ncore:8080   # or your ncore-go API
+
+# Run the stack
 docker compose up -d --build
+
+# Open
+# TMDB proxy:  http://localhost:8080
+# NCore app:   http://localhost:8080/ncore
 ```
 
-This starts three containers:
-- `ncore` — NCore API (port 1001)
-- `qbit` — qBittorrent (port 1002)
-- `ncore-tmdb` — main service (port 8080)
-
-## Local Development
+Local build without Docker:
 
 ```bash
-# Single command: bun install + build SPA/widget + embed into Go binary
-make
-
-# Run
+make          # bun frontends + go binary
 ./bin/ncore-tmdb
-# or
-make run
-
-# Hot-reload Go (rebuilds frontends first)
-make dev
-```
-
-### Frontend only (Vite via bun)
-
-```bash
-cd webapp && bun run dev      # proxies /api → :8080
-cd widget && bun run build
-```
-
-## App routes
-
-| Path | Description |
-|------|-------------|
-| `/` | Proxied TMDB site (unchanged asset handling) |
-| `/ncore` | NCore search client |
-| `/ncore/torrent/:id` | Torrent detail + qBit / .torrent download |
-| `/widget/*` | Embedded widget assets |
-| `/api/*` | REST API |
-
-TMDB pages get an **NCore** button in the header linking to `/ncore`. The NCore app header links back to TMDB (`/`).
-
-## API Endpoints
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/health` | Health check |
-| `GET /api/movie/:tmdbID` | Movie details + torrents (for widget) |
-| `GET /api/tv/:tmdbID` | TV details + torrents |
-| `GET /api/download/:id` | Download torrent file (cached DB row) |
-| `GET /api/qbit/download/:id` | Send torrent to qBittorrent (cached) |
-| `POST /api/ncore/search` | Search nCore (ncore-go API) |
-| `GET /api/ncore/torrent/:id` | Torrent details |
-| `GET /api/ncore/download/:id` | Download .torrent by id |
-| `POST /api/ncore/qbit/:id` | Send to qBittorrent by id |
-| `GET /api/ncore/types` | Category list for UI |
-| `GET /api/ncore/recommended` | Recommended torrents |
-| `GET /api/ncore/activity` | Hit & Run activity |
-
-### Search body example
-
-```json
-{
-  "pattern": "inception",
-  "type": "hd_hun",
-  "where": "name",
-  "sort_by": "seeders",
-  "sort_order": "DESC",
-  "page": 1
-}
-```
-
-## Build layout
-
-```
-webapp/                 # React + Vite + Tailwind + shadcn SPA
-widget/                 # React widget injected into TMDB pages
-widget/public/ncore.png # Provider icon for the widget
-internal/static/webapp  # Built SPA (embedded by Go)
-internal/static/widget  # Built widget + snippet.html (embedded)
-```
-
-`make` (or `make build`) runs bun install/build for both frontends, then `go build` with embedded assets. The Dockerfile multi-stage build does the same with `oven/bun`.
-
-## Helm (Kubernetes)
-
-```bash
-kubectl create secret generic ncore-tmdb-secrets \
-  --from-literal=TMDB_API_KEY=your_tmdb_api_key \
-  --from-literal=NCORE_USER=your_ncore_username \
-  --from-literal=NCORE_PASS=your_ncore_password \
-  --from-literal=QBIT_USER=admin \
-  --from-literal=QBIT_PASS=adminadmin
-
-helm install ncore-tmdb ./k8s/ncore-tmdb
 ```
