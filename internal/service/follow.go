@@ -626,8 +626,16 @@ func grabRelease(f *database.Follow, t Torrent, season, episode int) error {
 	if filename == "" {
 		filename = t.ID
 	}
-	// Tag with ncore id for qBit linking
-	if err := AddTorrent(data, filename+".torrent", t.ID); err != nil {
+	// Layout under qBit downloads root:
+	//   Title.S01/Title.S01E01   (episode)
+	//   Title.S01/Title.S01      (season pack)
+	seasonDir := FollowSeasonSavePath(f.Name, season)
+	episodeName := FollowEpisodeFolderName(f.Name, season, episode)
+	if err := AddTorrent(data, filename+".torrent", AddTorrentOpts{
+		NcoreID:  t.ID,
+		SavePath: seasonDir,
+		Rename:   episodeName,
+	}); err != nil {
 		return fmt.Errorf("qbit: %w", err)
 	}
 

@@ -101,7 +101,7 @@ func ncoreQbit(c *gin.Context) {
 		filename = id
 	}
 
-	if err := service.AddTorrent(data, filename+".torrent", id); err != nil {
+	if err := service.AddTorrent(data, filename+".torrent", service.AddTorrentOpts{NcoreID: id}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to add torrent to qbittorrent: %v", err)})
 		return
 	}

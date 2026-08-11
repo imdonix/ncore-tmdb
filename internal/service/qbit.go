@@ -96,8 +96,19 @@ func ParseNcoreIDFromTags(tags string) string {
 	return ""
 }
 
-// AddTorrent uploads a .torrent file. Optional ncoreID is stored as tag ncore:{id}.
-func AddTorrent(torrentData []byte, filename string, ncoreID string) error {
+// AddTorrentOpts controls optional qBittorrent add behavior.
+type AddTorrentOpts struct {
+	// NcoreID is stored as tag ncore:{id} for linking back to the SPA.
+	NcoreID string
+	// SavePath is the download folder relative to qBit's default save path
+	// (e.g. "Show.Name.S01"). Empty = qBit default.
+	SavePath string
+	// Rename renames the torrent / content root (e.g. "Show.Name.S01E01").
+	Rename string
+}
+
+// AddTorrent uploads a .torrent file with optional tags, folder layout, and rename.
+func AddTorrent(torrentData []byte, filename string, opts AddTorrentOpts) error {
 	if err := qbitLogin(); err != nil {
 		return fmt.Errorf("failed to login to qbit: %w", err)
 	}
@@ -115,8 +126,18 @@ func AddTorrent(torrentData []byte, filename string, ncoreID string) error {
 		return err
 	}
 
-	if ncoreID != "" {
-		_ = writer.WriteField("tags", NcoreTag(ncoreID))
+	if opts.NcoreID != "" {
+		_ = writer.WriteField("tags", NcoreTag(opts.NcoreID))
+	}
+	// Force manual path so season subfolders are respected (disable Auto TMM).
+	if opts.SavePath != "" {
+		_ = writer.WriteField("autoTMM", "false")
+		_ = writer.WriteField("savepath", opts.SavePath)
+		// Prefer a subfolder named after the torrent (after rename).
+		_ = writer.WriteField("contentLayout", "Subfolder")
+	}
+	if opts.Rename != "" {
+		_ = writer.WriteField("rename", opts.Rename)
 	}
 
 	if err := writer.Close(); err != nil {
@@ -142,6 +163,42 @@ func AddTorrent(torrentData []byte, filename string, ncoreID string) error {
 	}
 
 	return nil
+}
+
+// FollowSeasonSavePath returns the season folder under the downloads root, e.g. "Show.Name.S01".
+func FollowSeasonSavePath(seriesName string, season int) string {
+	return fmt.Sprintf("%s.S%02d", sanitizeFolderName(seriesName), season)
+}
+
+// FollowEpisodeFolderName returns the episode (or pack) folder name inside the season dir.
+// Episode 0 → season pack: "Show.Name.S01"
+// Episode N → "Show.Name.S01E0N"
+func FollowEpisodeFolderName(seriesName string, season, episode int) string {
+	base := sanitizeFolderName(seriesName)
+	if episode <= 0 {
+		return fmt.Sprintf("%s.S%02d", base, season)
+	}
+	return fmt.Sprintf("%s.S%02dE%02d", base, season, episode)
+}
+
+func sanitizeFolderName(name string) string {
+	name = strings.TrimSpace(name)
+	// Match common release-style folders: spaces → dots, strip path-hostile chars
+	repl := strings.NewReplacer(
+		" ", ".", "/", ".", "\\", ".", ":", ".",
+		"?", "", "*", "", "\"", "", "<", "", ">", "", "|", "",
+		"'", "",
+	)
+	name = repl.Replace(name)
+	// Collapse repeated dots
+	for strings.Contains(name, "..") {
+		name = strings.ReplaceAll(name, "..", ".")
+	}
+	name = strings.Trim(name, ".")
+	if name == "" {
+		return "Unknown"
+	}
+	return name
 }
 
 // QbitTorrent is a subset of qBittorrent's torrents/info payload + ncore link.
