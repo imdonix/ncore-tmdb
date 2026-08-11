@@ -626,9 +626,9 @@ func grabRelease(f *database.Follow, t Torrent, season, episode int) error {
 	if filename == "" {
 		filename = t.ID
 	}
-	// Layout under qBit downloads root:
-	//   Title.S01/Title.S01E01   (episode)
-	//   Title.S01/Title.S01      (season pack)
+	// Layout under qBit downloads root (Jellyfin-friendly single series tree):
+	//   Title/Title.S01/Title.S01E01   (episode)
+	//   Title/Title.S01/Title.S01      (season pack)
 	seasonDir := FollowSeasonSavePath(f.Name, season)
 	episodeName := FollowEpisodeFolderName(f.Name, season, episode)
 	if err := AddTorrent(data, filename+".torrent", AddTorrentOpts{

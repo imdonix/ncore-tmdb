@@ -165,14 +165,24 @@ func AddTorrent(torrentData []byte, filename string, opts AddTorrentOpts) error 
 	return nil
 }
 
-// FollowSeasonSavePath returns the season folder under the downloads root, e.g. "Show.Name.S01".
-func FollowSeasonSavePath(seriesName string, season int) string {
-	return fmt.Sprintf("%s.S%02d", sanitizeFolderName(seriesName), season)
+// FollowSeriesRootFolder is the top-level series folder under the downloads root
+// (keeps Jellyfin from treating each season as a separate show).
+// e.g. "Show.Name"
+func FollowSeriesRootFolder(seriesName string) string {
+	return sanitizeFolderName(seriesName)
 }
 
-// FollowEpisodeFolderName returns the episode (or pack) folder name inside the season dir.
-// Episode 0 → season pack: "Show.Name.S01"
+// FollowSeasonSavePath is the season folder under the series root:
+// downloads/Show.Name/Show.Name.S01
+func FollowSeasonSavePath(seriesName string, season int) string {
+	root := FollowSeriesRootFolder(seriesName)
+	return fmt.Sprintf("%s/%s.S%02d", root, root, season)
+}
+
+// FollowEpisodeFolderName is the episode (or pack) folder inside the season dir.
+// Episode 0 → pack: "Show.Name.S01"
 // Episode N → "Show.Name.S01E0N"
+// Full path: Show.Name/Show.Name.S01/Show.Name.S01E01
 func FollowEpisodeFolderName(seriesName string, season, episode int) string {
 	base := sanitizeFolderName(seriesName)
 	if episode <= 0 {
