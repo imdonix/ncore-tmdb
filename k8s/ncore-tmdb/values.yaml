@@ -4,7 +4,8 @@ tmdb:
   image:
     repository: imdonix/ncore-tmdb
     tag: latest
-    pullPolicy: Always
+    # Images are imported into the k3s node's containerd during deploys.
+    pullPolicy: IfNotPresent
   service:
     type: ClusterIP
     port: 8080
