@@ -1,13 +1,13 @@
 # ncore-tmdb
 
-A self-hosted bridge between [The Movie Database](https://www.themoviedb.org), the nCore tracker, and qBittorrent — so you search, follow series, and grab releases without leaving one polished UI.
+A self-hosted bridge between [The Movie Database](https://www.themoviedb.org), the nCore tracker, and qBittorrent — so you download movies, follow series, and manage downloads without leaving one polished UI.
 
-### Movies — torrents where you browse
+### Movies — pick a resolution, download now
 
-Open any movie on your TMDB proxy. A **Download with Torrent** panel lists nCore releases with seeders, size, and one-click open in the dashboard.
+Open any movie on your TMDB proxy. The widget detects every resolution nCore has (`2160p`, `1080p`, `720p`, `SD`), you pick one, and the best-seeded release is sent straight to qBittorrent — with live progress on the page.
 
 <p align="center">
-  <img src="docs/screenshots/tmdb-movie.png" alt="Fight Club with nCore torrent list" width="900" />
+  <img src="docs/screenshots/tmdb-movie.png" alt="Fight Club with nCore download widget" width="900" />
 </p>
 
 ### Series — follow once, grab forever
@@ -39,7 +39,7 @@ See every show you’re tracking, run a manual check, jump back to TMDB, and ins
 | Feature | What you get |
 |--------|----------------|
 | **TMDB proxy** | Familiar browse experience, enhanced with download tools |
-| **Movie widget** | Instant nCore matches on the page |
+| **Movie download** | Available resolutions detected, best release sent to qBit in one click |
 | **Series follow** | Quality choice, skip seasons, hourly scan, season-pack upgrades |
 | **NCore SPA** | Search, torrent detail, follows, qBit queue |
 | **One binary** | Frontends built and embedded — deploy a single Go binary |

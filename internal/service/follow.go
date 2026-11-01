@@ -493,41 +493,7 @@ func CheckFollow(followID int64) (*FollowCheckResult, error) {
 }
 
 func searchSeriesTorrents(pattern string) ([]Torrent, error) {
-	// Prefer Hungarian HD series then general; all_own is broadest
-	var all []Torrent
-	seen := map[string]bool{}
-
-	// Multiple pages for better coverage
-	for page := 1; page <= 3; page++ {
-		res, err := SearchNCoreFull(SearchRequest{
-			Pattern:   pattern,
-			Type:      "all_own",
-			Where:     "name",
-			SortBy:    "seeders",
-			SortOrder: "DESC",
-			Page:      page,
-		})
-		if err != nil {
-			if page == 1 {
-				return nil, err
-			}
-			break
-		}
-		if len(res.Torrents) == 0 {
-			break
-		}
-		for _, t := range res.Torrents {
-			if seen[t.ID] {
-				continue
-			}
-			seen[t.ID] = true
-			all = append(all, t)
-		}
-		if res.NumOfPages > 0 && page >= res.NumOfPages {
-			break
-		}
-	}
-	return all, nil
+	return searchNCoreAllPages(pattern, 3)
 }
 
 // seasonHasMissingEpisodes is true if any episode still needs a release

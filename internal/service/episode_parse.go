@@ -93,8 +93,13 @@ func MatchesQuality(title, quality string) bool {
 
 // TitleLooksLikeSeries does a light check the release is for the show name.
 func TitleLooksLikeSeries(title, seriesName string) bool {
+	return TitleLooksLikeContent(title, seriesName)
+}
+
+// TitleLooksLikeContent checks every meaningful token of name appears in title.
+func TitleLooksLikeContent(title, name string) bool {
 	t := normalizeLoose(title)
-	n := normalizeLoose(seriesName)
+	n := normalizeLoose(name)
 	if n == "" {
 		return true
 	}

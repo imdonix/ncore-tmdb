@@ -27,6 +27,14 @@ func RegisterRoutes(r *gin.Engine) {
 		api.GET("/download/:id", download)
 		api.GET("/qbit/download/:id", qbitDownload)
 
+		// Movie download widget (resolution picker + one-click qBittorrent)
+		movies := api.Group("/movies")
+		{
+			movies.GET("/:tmdbID", movieOverview)
+			movies.POST("/:tmdbID/download", movieDownloadStart)
+			movies.GET("/:tmdbID/download", movieDownloadStatus)
+		}
+
 		// qBittorrent management for the NCore SPA
 		qbit := api.Group("/qbit")
 		{

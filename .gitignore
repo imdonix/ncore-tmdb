@@ -4,6 +4,8 @@ air/
 *.exe
 *.out
 *.db
+*.db-wal
+*.db-shm
 .env
 node_modules/
 **/node_modules/

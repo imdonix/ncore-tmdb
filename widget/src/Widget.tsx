@@ -1,15 +1,5 @@
 import { useEffect, useState } from "react"
-import { ArrowDown, ArrowUp, Calendar, ExternalLink, Loader2, Bell, BellOff } from "lucide-react"
-
-type Torrent = {
-  ID: string
-  Title: string
-  Type?: string
-  Date?: string
-  Seeders?: number
-  Leechers?: number
-  Provider?: string
-}
+import { Bell, BellOff, Check, Download, ExternalLink, Loader2 } from "lucide-react"
 
 type SearchParams = {
   pattern?: string
@@ -18,11 +8,6 @@ type SearchParams = {
   sort_by?: string
   sort_order?: string
   page?: number
-}
-
-type FetchResponse = {
-  torrents?: Torrent[]
-  search?: SearchParams
 }
 
 type Follow = {
@@ -53,6 +38,44 @@ type SeasonInfo = {
   name?: string
 }
 
+type MovieDetails = {
+  tmdbId: number
+  name: string
+  year: string
+  releaseDate: string
+  posterPath?: string
+  searchPattern: string
+}
+
+type MovieResolution = {
+  quality: string
+  releases: number
+  seeders: number
+}
+
+type MovieDownload = {
+  ncoreTorrentId: string
+  torrentTitle: string
+  quality: string
+  qbitHash?: string
+  status: string
+  progress?: number
+  state?: string
+  size?: number
+  downloaded?: number
+  dlspeed?: number
+  eta?: number
+  ratio?: number
+}
+
+type MovieOverview = {
+  movie: MovieDetails
+  resolutions: MovieResolution[]
+  download?: MovieDownload | null
+  search?: SearchParams
+  searchError?: string
+}
+
 function buildSearchResultUrl(search?: SearchParams): string {
   const params = new URLSearchParams()
   const pattern = (search?.pattern ?? "").trim()
@@ -81,108 +104,314 @@ function formatDate(value?: string) {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
 }
 
+function formatBytes(n?: number) {
+  if (!n || n < 0) return "0 B"
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"]
+  let v = n
+  let i = 0
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i++
+  }
+  return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+}
+
+function formatEta(seconds?: number) {
+  if (seconds == null || seconds < 0 || seconds >= 8640000) return "—"
+  if (seconds < 60) return `${seconds}s`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
+  if (seconds < 86400) {
+    const h = Math.floor(seconds / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
+    return `${h}h ${m}m`
+  }
+  const d = Math.floor(seconds / 86400)
+  const h = Math.floor((seconds % 86400) / 3600)
+  return `${d}d ${h}h`
+}
+
+function qbitStateLabel(state?: string) {
+  const map: Record<string, string> = {
+    downloading: "Downloading",
+    metaDL: "Fetching metadata",
+    forcedDL: "Downloading",
+    allocating: "Allocating",
+    stalledDL: "Stalled",
+    checkingDL: "Checking",
+    checkingUP: "Checking",
+    checkingResumeData: "Checking",
+    moving: "Moving",
+    uploading: "Seeding",
+    forcedUP: "Seeding",
+    stalledUP: "Seeding (stalled)",
+    queuedDL: "Queued",
+    queuedUP: "Queued seed",
+    pausedDL: "Paused",
+    pausedUP: "Paused seed",
+    stoppedDL: "Stopped",
+    stoppedUP: "Stopped seed",
+    error: "Error",
+    missingFiles: "Missing files",
+  }
+  return (state && map[state]) || state || ""
+}
+
+function pickDefaultQuality(resolutions: MovieResolution[]) {
+  if (resolutions.some((r) => r.quality === "1080p")) return "1080p"
+  return resolutions[0]?.quality ?? ""
+}
+
 export function Widget() {
   const cfg = window.__NCORE_WIDGET__
   if (cfg?.contentType === "tv") {
     return <FollowPanel tmdbId={cfg.tmdbID} />
   }
-  return <MovieTorrentPanel />
+  return <MovieDownloadPanel tmdbId={cfg?.tmdbID ?? ""} />
 }
 
-function MovieTorrentPanel() {
-  const cfg = window.__NCORE_WIDGET__
-  const [torrents, setTorrents] = useState<Torrent[]>([])
+function MovieDownloadPanel({ tmdbId }: { tmdbId: string }) {
+  const [movie, setMovie] = useState<MovieDetails | null>(null)
+  const [resolutions, setResolutions] = useState<MovieResolution[]>([])
+  const [download, setDownload] = useState<MovieDownload | null>(null)
+  const [quality, setQuality] = useState("")
   const [searchHref, setSearchHref] = useState("/ncore")
   const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!cfg?.contentType || !cfg?.tmdbID) {
+    if (!tmdbId) {
       setError("Missing widget config")
       setLoading(false)
       return
     }
 
-    const url = `/api/${cfg.contentType}/${cfg.tmdbID}`
     let cancelled = false
 
     ;(async () => {
       try {
-        const res = await fetch(url)
-        if (!res.ok) throw new Error("Failed to load torrents")
-        const data: FetchResponse = await res.json()
-        if (!cancelled) {
-          setTorrents(data.torrents ?? [])
-          setSearchHref(buildSearchResultUrl(data.search))
-          setLoading(false)
+        const res = await fetch(`/api/movies/${encodeURIComponent(tmdbId)}`)
+        const data: MovieOverview & { error?: string } = await res.json()
+        if (!res.ok) throw new Error(data.error || "Failed to load movie")
+        if (cancelled) return
+
+        const available = data.resolutions ?? []
+        setMovie(data.movie ?? null)
+        setResolutions(available)
+        setDownload(data.download ?? null)
+        setSearchHref(buildSearchResultUrl(data.search))
+
+        if (data.download?.quality) {
+          setQuality(data.download.quality)
+        } else if (available.length > 0) {
+          setQuality(pickDefaultQuality(available))
         }
+        setError(data.searchError && !data.download ? data.searchError : null)
       } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Error")
-          setLoading(false)
-        }
+        if (!cancelled) setError(err instanceof Error ? err.message : "Error")
+      } finally {
+        if (!cancelled) setLoading(false)
       }
     })()
 
     return () => {
       cancelled = true
     }
-  }, [cfg?.contentType, cfg?.tmdbID])
+  }, [tmdbId])
+
+  const downloading = download?.status === "downloading"
+  const rawPct = Math.min(100, Math.max(0, download?.progress ?? 0))
+  const done = download?.status === "completed" || rawPct >= 99.9
+  const pct = done ? 100 : rawPct
+  const locked = downloading || done
+
+  // Poll only while a download is active — no nCore searches in the loop.
+  useEffect(() => {
+    if (!downloading || !tmdbId) return
+    const timer = window.setInterval(() => {
+      void fetch(`/api/movies/${encodeURIComponent(tmdbId)}/download`)
+        .then(async (res) => {
+          if (!res.ok) return
+          const data = await res.json()
+          setDownload(data.download ?? null)
+        })
+        .catch(() => {
+          // ignore transient qBittorrent errors
+        })
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [downloading, tmdbId])
+
+  const onDownload = async () => {
+    if (!tmdbId || !quality) return
+    setBusy(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const res = await fetch(`/api/movies/${encodeURIComponent(tmdbId)}/download`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quality }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || "Download failed")
+      setDownload(data.download ?? null)
+      setMessage(
+        data.download?.status === "completed"
+          ? "Already downloaded."
+          : "Added to qBittorrent — it will keep going in the background."
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Download failed")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const selected = resolutions.find((r) => r.quality === quality)
+  const statusText = done
+    ? "ready to watch"
+    : download?.status === "missing"
+      ? "removed from qBittorrent"
+      : downloading
+        ? qbitStateLabel(download?.state) || "downloading"
+        : download?.status
 
   return (
     <section className="nw-panel">
       <div className="nw-header">
-        <span className="nw-title">Download with Torrent</span>
+        <span className="nw-title">Download movie</span>
         <a className="nw-browse" href={searchHref} title="Open the same nCore search">
           Open search result
           <ExternalLink size={12} aria-hidden />
         </a>
       </div>
 
-      <div className="nw-body">
+      <div className="nw-body nw-follow-body">
         {loading && (
           <div className="nw-state">
             <Loader2 size={16} className="nw-spin" />
-            Loading torrents…
+            Checking nCore…
           </div>
         )}
+
         {error && <div className="nw-state nw-error">{error}</div>}
-        {!loading && !error && torrents.length === 0 && (
-          <div className="nw-state">No torrents found.</div>
-        )}
-        {!loading && !error && torrents.length > 0 && (
-          <ul className="nw-list">
-            {torrents.map((t) => (
-              <li key={t.ID}>
-                <a className="nw-item" href={`/ncore/torrent/${t.ID}`} title="Open in NCore client">
-                  <div className="nw-item-main">
-                    <img
-                      src="/widget/ncore.png"
-                      alt={t.Provider || "NCORE"}
-                      className="nw-provider"
-                      width={14}
-                      height={14}
-                    />
-                    <span className="nw-item-title">{t.Title}</span>
+
+        {!loading && (
+          <div className="nw-follow-setup">
+            {movie && (
+              <p className="nw-follow-desc">
+                {movie.name}
+                {movie.year ? ` (${movie.year})` : ""} — pick a resolution and let qBittorrent
+                handle the rest.
+              </p>
+            )}
+
+            {resolutions.length > 0 && (
+              <div className="nw-quality">
+                <span className="nw-quality-label">Resolution</span>
+                <div className="nw-quality-btns">
+                  {resolutions.map((r) => (
+                    <button
+                      key={r.quality}
+                      type="button"
+                      className={`nw-qbtn ${quality === r.quality ? "active" : ""}`}
+                      onClick={() => setQuality(r.quality)}
+                      disabled={busy || locked}
+                      title={`${r.releases} release${r.releases === 1 ? "" : "s"} · best ${r.seeders} seeders`}
+                    >
+                      {r.quality}
+                    </button>
+                  ))}
+                </div>
+                {selected && (
+                  <p className="nw-skip-hint">
+                    {selected.releases} release{selected.releases === 1 ? "" : "s"} · best{" "}
+                    {selected.seeders} seeders
+                  </p>
+                )}
+              </div>
+            )}
+
+            {resolutions.length === 0 && !download && !error && (
+              <div className="nw-state">No releases found on nCore yet.</div>
+            )}
+
+            {download && (
+              <div className="nw-download">
+                <div className="nw-follow-stats">
+                  <span className="nw-pill">{download.quality}</span>
+                  <span className="nw-muted">{statusText}</span>
+                  {!!download.size && (
+                    <span className="nw-muted">
+                      {formatBytes(download.downloaded || (pct / 100) * download.size)} /{" "}
+                      {formatBytes(download.size)}
+                    </span>
+                  )}
+                </div>
+
+                <div className="nw-progress">
+                  <div
+                    className={`nw-progress-fill ${done ? "done" : ""}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+
+                {downloading && (
+                  <div className="nw-download-meta">
+                    <span>↓ {formatBytes(download.dlspeed)}/s</span>
+                    <span>ETA {formatEta(download.eta)}</span>
+                    <span>{pct.toFixed(1)}%</span>
                   </div>
-                  <div className="nw-meta">
-                    <span className="nw-meta-item" title="Upload date">
-                      <Calendar size={11} />
-                      {formatDate(t.Date)}
-                    </span>
-                    <span className="nw-meta-item nw-seed" title="Seeders">
-                      <ArrowUp size={11} />
-                      {t.Seeders ?? 0}
-                    </span>
-                    <span className="nw-meta-item nw-leech" title="Leechers">
-                      <ArrowDown size={11} />
-                      {t.Leechers ?? 0}
-                    </span>
-                  </div>
-                </a>
-              </li>
-            ))}
-          </ul>
+                )}
+
+                <div className="nw-download-title" title={download.torrentTitle}>
+                  {download.torrentTitle}
+                </div>
+
+                <div className="nw-follow-actions">
+                  <a
+                    className="nw-secondary-btn"
+                    href={`/ncore/torrent/${download.ncoreTorrentId}`}
+                  >
+                    Open torrent
+                  </a>
+                  <a className="nw-secondary-btn" href="/ncore/downloads">
+                    All downloads
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {message && <div className="nw-state nw-ok">{message}</div>}
+
+            {(resolutions.length > 0 || download) && (
+              <button
+                type="button"
+                className="nw-primary-btn"
+                disabled={busy || locked || !quality}
+                onClick={onDownload}
+              >
+                {busy ? (
+                  <Loader2 size={14} className="nw-spin" />
+                ) : done ? (
+                  <Check size={14} />
+                ) : (
+                  <Download size={14} />
+                )}
+                {busy
+                  ? "Starting…"
+                  : done
+                    ? "Downloaded"
+                    : downloading
+                      ? `Downloading ${pct.toFixed(0)}%`
+                      : download?.status === "missing"
+                        ? "Download again"
+                        : "Download movie now"}
+              </button>
+            )}
+          </div>
         )}
       </div>
       <style>{widgetCss}</style>
@@ -553,25 +782,6 @@ const widgetCss = `
   flex-direction: column;
   gap: 4px;
 }
-.nw-item {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
-  border-radius: 8px;
-  transition: background .15s ease;
-  text-decoration: none;
-  color: inherit;
-}
-.nw-item:hover { background: rgba(255,255,255,.05); }
-.nw-item-main { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
-.nw-provider { margin-top: 2px; width: 14px; height: 14px; flex-shrink: 0; border-radius: 2px; }
-.nw-item-title { font-size: 12.5px; font-weight: 500; color: #f1f5f9; word-break: break-word; line-height: 1.35; }
-.nw-item:hover .nw-item-title { color: #fff; text-decoration: underline; text-underline-offset: 2px; }
-.nw-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-left: 22px; }
-.nw-meta-item { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--nw-muted); }
-.nw-seed { color: var(--nw-seed); }
-.nw-leech { color: var(--nw-leech); }
 .nw-follow-desc { margin: 0 0 12px; font-size: 12px; line-height: 1.45; color: var(--nw-muted); }
 .nw-quality { margin-bottom: 12px; }
 .nw-quality-label { display: block; font-size: 11px; color: var(--nw-muted); margin-bottom: 6px; }
@@ -623,6 +833,43 @@ const widgetCss = `
 .nw-secondary-btn { background: rgba(255,255,255,.08); color: var(--nw-text); border: 1px solid var(--nw-border); }
 .nw-danger-btn { background: transparent; color: #fca5a5; border: 1px solid rgba(248,113,113,.35); }
 .nw-follow-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.nw-download {
+  margin: 4px 0 12px;
+  padding: 10px;
+  border: 1px solid var(--nw-border);
+  border-radius: 10px;
+  background: rgba(255,255,255,.03);
+}
+.nw-download .nw-follow-actions { margin-top: 0; }
+.nw-progress {
+  height: 8px;
+  margin: 4px 0 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, .22);
+}
+.nw-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--nw-primary);
+  transition: width .25s ease;
+}
+.nw-progress-fill.done { background: #34d399; }
+.nw-download-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--nw-muted);
+}
+.nw-download-title {
+  margin-bottom: 8px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--nw-muted);
+  word-break: break-word;
+}
 .nw-follow-stats { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; }
 .nw-pill {
   font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px;
@@ -638,10 +885,4 @@ const widgetCss = `
 .nw-ep-label { font-weight: 600; min-width: 7rem; }
 .nw-ep-status { color: var(--nw-muted); text-transform: capitalize; flex: 1; }
 .nw-ep-link { color: var(--nw-primary); text-decoration: none; font-size: 11px; }
-@media (min-width: 720px) {
-  .nw-item { flex-direction: row; align-items: center; justify-content: space-between; }
-  .nw-item-main { flex: 1; min-width: 0; }
-  .nw-item-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .nw-meta { padding-left: 0; flex-shrink: 0; }
-}
 `

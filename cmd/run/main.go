@@ -38,6 +38,9 @@ func main() {
 	if err := database.CreateFollowTables(); err != nil {
 		log.Fatal("Failed to create follow tables:", err)
 	}
+	if err := database.CreateMovieTables(); err != nil {
+		log.Fatal("Failed to create movie tables:", err)
+	}
 
 	service.InitTMDB()
 	service.InitNCore()
